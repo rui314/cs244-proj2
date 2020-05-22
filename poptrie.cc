@@ -4,6 +4,9 @@
 #include <cstdlib>
 #include <utility>
 
+class Trie;
+class Poptrie;
+
 constexpr int K = 6;
 
 static constexpr int power_of_two(int n) {
@@ -57,6 +60,8 @@ public:
   void dump() { dump2(root, 0); }
 
 private:
+  friend Poptrie;
+
   struct Node {
     std::vector<Node> children;
     uint32_t val = 0;
@@ -87,12 +92,10 @@ private:
 
 class Poptrie {
 public:
-  Poptrie() {
-    children.push_back({0, 0, 0, 0});
-    leaves.push_back(0);
+  Poptrie(Trie &trie) {
+    children.resize(1);
+    import(trie.root, 0);
   }
-
-  bool insert(uint32_t key, uint32_t key_len, uint32_t val);
 
   uint32_t lookup(uint32_t key) {
     uint32_t cur = 0;
@@ -113,11 +116,42 @@ public:
 
 private:
   struct Node {
-    uint64_t bits;
-    uint64_t leafbits;
-    uint32_t base0;
-    uint32_t base1;
+    uint64_t bits = 0;
+    uint64_t leafbits = 0;
+    uint32_t base0 = 0;
+    uint32_t base1 = 0;
   };
+
+  void import(Trie::Node &from, int idx) {
+    int start = children.size();
+
+    for (int i = 0; i < K; i++)
+      if (!from.children[i].is_leaf)
+        children.push_back({});
+
+    Node &to = children[idx];
+    to.base0 = start;
+    to.base1 = leaves.size();
+
+    for (int i = 0; i < K; i++)
+      if (!from.children[i].is_leaf)
+        to.bits |= 1L<<i;
+
+    for (int i = 0; i < K; i++) {
+      if (from.children[i].is_leaf) {
+        if (leaves.size() == to.base1 ||
+            leaves.back() != from.children[i].val) {
+          to.leafbits |= 1L<<i;
+          leaves.push_back(from.children[i].val);
+        }
+      }
+    }
+
+    int i = 0;
+    for (int j = 0; j < K; j++)
+      if (!from.children[j].is_leaf)
+        import(from.children[j], start + i++);
+  }
 
   std::vector<Node> children;
   std::vector<uint32_t> leaves;
@@ -150,6 +184,15 @@ static void test() {
   assert(8, trie.lookup(0x80010000));
   assert(8, trie.lookup(0x8001ffff));
   assert(5, trie.lookup(0x80020000));
+
+  Poptrie ptrie(trie);
+  assert(3, ptrie.lookup(0b11));
+  assert(3, ptrie.lookup(0b1));
+  assert(3, ptrie.lookup(0x01234567));
+  assert(5, ptrie.lookup(0x80000010));
+  assert(8, ptrie.lookup(0x80010000));
+  assert(8, ptrie.lookup(0x8001ffff));
+  assert(5, ptrie.lookup(0x80020000));
 }
 
 int main() {
