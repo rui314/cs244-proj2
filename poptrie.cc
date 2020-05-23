@@ -1,4 +1,5 @@
 #include <iostream>
+#include <chrono>
 #include <algorithm>
 #include <cstdio>
 #include <random>
@@ -6,6 +7,8 @@
 #include <vector>
 #include <cstdlib>
 #include <utility>
+
+using std::chrono::high_resolution_clock;
 
 std::default_random_engine rand_engine;
 
@@ -279,7 +282,39 @@ static void test2() {
   }
 }
 
+__attribute__((unused))
+static std::chrono::microseconds bench(volatile uint32_t *x, std::vector<uint32_t> &random) {
+  std::vector<Range> ranges;
+  for (int i = 0; i < 100*1000; i++)
+    ranges.push_back(create_random_range());
+
+  std::stable_sort(ranges.begin(), ranges.end(),
+                   [](const Range &a, const Range &b) {
+                     return a.masklen < b.masklen;
+                   });
+
+  Trie trie;
+  for (Range &range : ranges)
+    trie.insert(range.addr, range.masklen, range.val);
+  Poptrie ptrie(trie);
+
+  high_resolution_clock::time_point t1 = high_resolution_clock::now();
+  uint32_t sum = 0;
+  for (uint32_t addr : random)
+    sum += ptrie.lookup(addr);
+  *x = sum;
+  high_resolution_clock::time_point t2 = high_resolution_clock::now();
+  return std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+}
+
 int main() {
-  test2();
-  std::cout << "OK\n";
+  static std::uniform_int_distribution<uint32_t> dist1(0, UINT32_MAX);
+  std::vector<uint32_t> random;
+  for (int i = 0; i < 1000*1000; i++)
+    random.push_back(dist1(rand_engine));
+
+  volatile uint32_t sum = 0;
+  std::chrono::microseconds dur = bench(&sum, random);
+  printf("OK %ld μs\n", dur.count());
+  return sum;
 }
