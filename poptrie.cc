@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstdio>
+#include <bitset>
 #include <vector>
 #include <cstdlib>
 #include <utility>
@@ -72,7 +73,7 @@ private:
     if (!cur->is_leaf)
       return;
 
-    cur->children.resize(1<<K);
+    cur->children.resize(1L<<K);
     for (Node &n : cur->children)
       n.val = cur->val;
     cur->is_leaf = false;
@@ -101,18 +102,37 @@ public:
     uint32_t cur = 0;
     uint64_t bits = children[0].bits;
     uint32_t offset = 0;
-    uint32_t v = extract(key, 0, K);
+    uint32_t v = extract(key, 32, K);
 
     while (bits & (1UL << v)) {
+      //      std::cout << "=== internal node\n";
       cur = children[cur].base1 + popcnt(bits, v);
       bits = children[cur].bits;
       offset += K;
-      v = extract(key, offset, K);
+      v = extract(key, 32 - offset, K);
     }
 
     Node c = children[cur];
-    return leaves[c.base0 + popcnt(c.leafbits, v + 1)];
+    /*
+    std::cout << "=== leaf: v=" << v
+              << " c.base0=" << c.base0
+              << " popcnt=" << popcnt(c.leafbits, v + 1)
+              << "\n";
+    */
+    return leaves[c.base0 + popcnt(c.leafbits, v + 1) - 1];
  }
+
+  void dump() {
+    std::cout << "Children:\n";
+    for (Node &node : children)
+      std::cout << " bits=" << std::bitset<64>(node.bits)
+                << " leafbits=" << std::bitset<64>(node.leafbits)
+                << " base0=" << node.base0 << " base1=" << node.base1 << "\n";
+    std::cout << "Leaves:";
+    for (uint32_t x : leaves)
+      std::cout << " " << x;
+    std::cout << "\n";
+  }
 
 private:
   struct Node {
@@ -125,21 +145,21 @@ private:
   void import(Trie::Node &from, int idx) {
     int start = children.size();
 
-    for (int i = 0; i < K; i++)
-      if (!from.children[i].is_leaf)
+    for (Trie::Node &node : from.children)
+      if (!node.is_leaf)
         children.push_back({});
 
     Node &to = children[idx];
-    to.base0 = start;
-    to.base1 = leaves.size();
+    to.base0 = leaves.size();
+    to.base1 = start;
 
-    for (int i = 0; i < K; i++)
+    for (size_t i = 0; i < from.children.size(); i++)
       if (!from.children[i].is_leaf)
         to.bits |= 1L<<i;
 
-    for (int i = 0; i < K; i++) {
+    for (size_t i = 0; i < from.children.size(); i++) {
       if (from.children[i].is_leaf) {
-        if (leaves.size() == to.base1 ||
+        if (leaves.size() == to.base0 ||
             leaves.back() != from.children[i].val) {
           to.leafbits |= 1L<<i;
           leaves.push_back(from.children[i].val);
@@ -147,8 +167,8 @@ private:
       }
     }
 
-    int i = 0;
-    for (int j = 0; j < K; j++)
+    size_t i = 0;
+    for (size_t j = 0; j < from.children.size(); j++)
       if (!from.children[j].is_leaf)
         import(from.children[j], start + i++);
   }
@@ -175,7 +195,7 @@ static void test() {
   trie.insert(0x80000000, 1, 5);
   trie.insert(0x80010000, 16, 8);
 
-  // trie.dump();
+  trie.dump();
 
   assert(3, trie.lookup(0b11));
   assert(3, trie.lookup(0b1));
@@ -186,6 +206,7 @@ static void test() {
   assert(5, trie.lookup(0x80020000));
 
   Poptrie ptrie(trie);
+  ptrie.dump();
   assert(3, ptrie.lookup(0b11));
   assert(3, ptrie.lookup(0b1));
   assert(3, ptrie.lookup(0x01234567));
