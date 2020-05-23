@@ -284,6 +284,7 @@ static void test2() {
 
 __attribute__((unused))
 static std::chrono::microseconds bench(volatile uint32_t *x, std::vector<uint32_t> &random) {
+  high_resolution_clock::time_point t1 = high_resolution_clock::now();
   std::vector<Range> ranges;
   for (int i = 0; i < 100*1000; i++)
     ranges.push_back(create_random_range());
@@ -298,7 +299,7 @@ static std::chrono::microseconds bench(volatile uint32_t *x, std::vector<uint32_
     trie.insert(range.addr, range.masklen, range.val);
   Poptrie ptrie(trie);
 
-  high_resolution_clock::time_point t1 = high_resolution_clock::now();
+
   uint32_t sum = 0;
   for (uint32_t addr : random)
     sum += ptrie.lookup(addr);
