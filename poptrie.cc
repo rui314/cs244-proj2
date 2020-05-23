@@ -1,9 +1,13 @@
 #include <iostream>
+#include <algorithm>
 #include <cstdio>
+#include <random>
 #include <bitset>
 #include <vector>
 #include <cstdlib>
 #include <utility>
+
+std::default_random_engine rand_engine;
 
 class Trie;
 class Poptrie;
@@ -47,7 +51,7 @@ public:
     }
   }
 
-  int lookup(uint32_t key) {
+  uint32_t lookup(uint32_t key) {
     Node *cur = &root;
     int offset = 0;
     while (!cur->is_leaf) {
@@ -113,13 +117,15 @@ public:
     }
 
     Node c = children[cur];
+    int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
     /*
     std::cout << "=== leaf: v=" << v
               << " c.base0=" << c.base0
-              << " popcnt=" << popcnt(c.leafbits, v + 1)
+              << " popcnt=" << count
+              << " leaves[c.base0 + popcnt(c.leafbits, v + 1) - 1]=" << leaves[c.base0 + count - 1]
               << "\n";
     */
-    return leaves[c.base0 + popcnt(c.leafbits, v + 1) - 1];
+    return leaves[c.base0 + count - 1];
  }
 
   void dump() {
@@ -177,7 +183,7 @@ private:
   std::vector<uint32_t> leaves;
 };
 
-void assert_(int expected, int actual, const std::string &code) {
+void assert_(uint32_t expected, uint32_t actual, const std::string &code) {
   if (expected == actual) {
     std::cout << code << " => " << expected << "\n";
   } else {
@@ -189,6 +195,7 @@ void assert_(int expected, int actual, const std::string &code) {
 #define assert(expected, actual) \
   assert_(expected, actual, #actual)
 
+__attribute__((unused))
 static void test() {
   Trie trie;
   trie.insert(0, 1, 3);
@@ -216,7 +223,62 @@ static void test() {
   assert(5, ptrie.lookup(0x80020000));
 }
 
+struct Range {
+  uint32_t addr;
+  int masklen;
+  uint32_t val;
+};
+
+static bool in_range(Range &range, uint32_t addr) {
+  return range.addr <= addr &&
+         addr < range.addr + (1L << (32 - range.masklen));
+}
+
+static Range create_random_range() {
+  static std::uniform_int_distribution<uint32_t> dist1(0, UINT32_MAX);
+  static std::uniform_int_distribution<uint32_t> dist2(8, 30);
+
+  uint32_t addr = dist1(rand_engine);
+  int masklen = dist2(rand_engine);
+  uint32_t val = dist1(rand_engine);
+  addr = addr & ~((1L << (32 - masklen)) - 1);
+  return {addr, masklen, val};
+}
+
+__attribute__((unused))
+static void test2() {
+  std::vector<Range> ranges;
+  for (int i = 0; i < 100; i++)
+    ranges.push_back(create_random_range());
+
+  Trie trie;
+  for (Range &range : ranges)
+    trie.insert(range.addr, range.masklen, range.val);
+
+  std::stable_sort(ranges.begin(), ranges.end(),
+                   [](const Range &a, const Range &b) {
+                     return a.masklen < b.masklen;
+                   });
+
+  Poptrie ptrie(trie);
+  ptrie.dump();
+
+  auto find = [&](uint32_t addr) -> uint32_t {
+                for (int i = ranges.size() - 1; i >= 0; i--)
+                  if (in_range(ranges[i], addr))
+                    return ranges[i].val;
+                return 0;
+              };
+
+  for (Range &range : ranges) {
+    std::cout << "range.addr =" << std::bitset<32>(range.addr) << "/" << range.masklen << "\n";
+    std::cout << "range.addr2=" << std::bitset<32>(range.addr + (1L << (32 - range.masklen)) - 1) << "/" << range.masklen << "\n";
+    assert(find(range.addr), ptrie.lookup(range.addr));
+    assert(find(range.addr), ptrie.lookup(range.addr + (1L << (32 - range.masklen)) - 1));
+  }
+}
+
 int main() {
-  test();
+  test2();
   std::cout << "OK\n";
 }
