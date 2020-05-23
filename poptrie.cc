@@ -248,20 +248,20 @@ static Range create_random_range() {
 __attribute__((unused))
 static void test2() {
   std::vector<Range> ranges;
-  for (int i = 0; i < 100; i++)
+  for (int i = 0; i < 110; i++)
     ranges.push_back(create_random_range());
-
-  Trie trie;
-  for (Range &range : ranges)
-    trie.insert(range.addr, range.masklen, range.val);
 
   std::stable_sort(ranges.begin(), ranges.end(),
                    [](const Range &a, const Range &b) {
                      return a.masklen < b.masklen;
                    });
 
+  Trie trie;
+  for (Range &range : ranges)
+    trie.insert(range.addr, range.masklen, range.val);
+
   Poptrie ptrie(trie);
-  ptrie.dump();
+  // ptrie.dump();
 
   auto find = [&](uint32_t addr) -> uint32_t {
                 for (int i = ranges.size() - 1; i >= 0; i--)
@@ -273,8 +273,9 @@ static void test2() {
   for (Range &range : ranges) {
     std::cout << "range.addr =" << std::bitset<32>(range.addr) << "/" << range.masklen << "\n";
     std::cout << "range.addr2=" << std::bitset<32>(range.addr + (1L << (32 - range.masklen)) - 1) << "/" << range.masklen << "\n";
-    assert(find(range.addr), ptrie.lookup(range.addr));
-    assert(find(range.addr), ptrie.lookup(range.addr + (1L << (32 - range.masklen)) - 1));
+    uint32_t expected = find(range.addr);
+    assert(expected, ptrie.lookup(range.addr));
+    assert(expected, ptrie.lookup(range.addr + (1L << (32 - range.masklen)) - 1));
   }
 }
 
