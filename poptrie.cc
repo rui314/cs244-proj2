@@ -18,7 +18,7 @@ class Trie;
 class Poptrie;
 
 constexpr int K = 6;
-constexpr int S = 12;
+constexpr int S = 18;
 
 static constexpr int power_of_two(int n) {
   int x = 1;
@@ -27,16 +27,22 @@ static constexpr int power_of_two(int n) {
   return x;
 }
 
-static uint32_t extract(uint32_t bits, int start, int len) {
+__attribute__((always_inline))
+static inline uint32_t extract(uint32_t bits, int start, int len) {
   return (bits >> (start - len)) & ((1L<<len) - 1);
 }
 
-static int popcnt(uint64_t x, int len) {
+__attribute__((always_inline))
+static inline int popcnt(uint64_t x, int len) {
   return __builtin_popcountl(x & ((1UL << len) - 1));
 }
 
 class Trie {
 public:
+  Trie() {
+    roots.resize(1<<S);
+  }
+
   void insert(uint32_t key, int key_len, uint32_t val) {
     if (key_len <= S) {
       for (int i = 0; i < (1L << (S - key_len)); i++) {
@@ -110,13 +116,13 @@ private:
       dump2(n, indent + 2);
   };
 
-  Node roots[1<<S];
+  std::vector<Node> roots;
 };
 
 class Poptrie {
 public:
   Poptrie(Trie &from) {
-    memset(direct_indices, 0, sizeof(direct_indices));
+    direct_indices.resize(1<<S);
 
     for (int i = 0; i < (1<<S); i++) {
       if (from.roots[i].is_leaf) {
@@ -220,7 +226,7 @@ private:
 
   std::vector<Node> children;
   std::vector<uint32_t> leaves;
-  uint32_t direct_indices[1<<S];
+  std::vector<uint32_t> direct_indices;
 };
 
 void assert_(uint32_t expected, uint32_t actual, const std::string &code) {
@@ -313,8 +319,8 @@ static void test2() {
 
   for (Range &range : ranges) {
     uint32_t end = range.addr + (1L << (32 - range.masklen)) - 1;
-    std::cout << "range.addr =" << std::bitset<32>(range.addr) << "/" << range.masklen << "\n";
-    std::cout << "range.addr2=" << std::bitset<32>(end) << "/" << range.masklen << "\n";
+    // std::cout << "range.addr =" << std::bitset<32>(range.addr) << "/" << range.masklen << "\n";
+    // std::cout << "range.addr2=" << std::bitset<32>(end) << "/" << range.masklen << "\n";
     ASSERT(find(range.addr), ptrie.lookup(range.addr));
     ASSERT(find(end), ptrie.lookup(end));
   }
@@ -323,7 +329,7 @@ static void test2() {
 static constexpr int repeat = 10;
 
 __attribute__((unused))
-static std::chrono::microseconds bench(volatile uint32_t *x, std::vector<uint32_t> &random) {
+static std::chrono::microseconds bench(uint32_t *x, std::vector<uint32_t> &random) {
   std::vector<Range> ranges;
   for (int i = 0; i < 84000; i++)
     ranges.push_back(create_random_range());
@@ -336,6 +342,7 @@ static std::chrono::microseconds bench(volatile uint32_t *x, std::vector<uint32_
   Trie trie;
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
+
   Poptrie ptrie(trie);
   ptrie.info();
 
@@ -356,7 +363,7 @@ int main() {
   for (int i = 0; i < 10*1000*1000; i++)
     random.push_back(dist1(rand_engine));
 
-  volatile uint32_t sum = 0;
+  uint32_t sum = 0;
   std::chrono::microseconds dur = bench(&sum, random);
   printf("OK %ld μs\n", dur.count());
   printf("OK %fMlps\n", (double)(random.size() * repeat) / ((double)dur.count() / 1000 / 1000) / 1000 / 1000);
