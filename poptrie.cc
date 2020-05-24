@@ -142,7 +142,6 @@ public:
     uint32_t offset = S + K;
 
     while (bits & (1UL << v)) {
-      std::cout << "cur=" << cur << "\n";
       cur = children[cur].base1 + popcnt(bits, v);
       bits = children[cur].bits;
       v = extract(key, 32 - offset, K);
@@ -344,14 +343,14 @@ static std::chrono::microseconds bench(volatile uint32_t *x, std::vector<uint32_
   uint32_t sum = 0;
   for (int i = 0; i < repeat; i++)
     for (uint32_t addr : random)
-      sum += trie.lookup(addr);
+      sum += ptrie.lookup(addr);
   *x = sum;
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
   return std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
 }
 
 int main() {
-#if 0
+#if 1
   static std::uniform_int_distribution<uint32_t> dist1(0, 1<<30);
   std::vector<uint32_t> random;
   for (int i = 0; i < 10*1000*1000; i++)
