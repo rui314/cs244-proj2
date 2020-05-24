@@ -352,7 +352,7 @@ static std::chrono::microseconds bench(volatile uint32_t *x, std::vector<uint32_
 
 int main() {
 #if 0
-  static std::uniform_int_distribution<uint32_t> dist1(0, UINT32_MAX);
+  static std::uniform_int_distribution<uint32_t> dist1(0, 1<<30);
   std::vector<uint32_t> random;
   for (int i = 0; i < 10*1000*1000; i++)
     random.push_back(dist1(rand_engine));
