@@ -111,27 +111,38 @@ private:
   Node roots[1<<S];
 };
 
-#if 0
 class Poptrie {
 public:
-  Poptrie(Trie &trie) {
-    children.resize(1);
-    import(trie.roots, 0);
+  Poptrie(Trie &from) {
+    for (int i = 0; i < from.roots.size(); i++) {
+      if (node.is_leaf) {
+        direct_indices[i] = node.val | 0x80000000;
+        continue;
+      }
+      
+      int idx = children.size();
+      direct_indices[i] = idx;
+      children.push_back({});
+      import(&from.roots[i], idx);
+    }
   }
 
   uint32_t lookup(uint32_t key) {
-    uint32_t cur = 0;
-    uint64_t bits = children[0].bits;
-    uint32_t offset = 0;
-    uint32_t v = extract(key, 32, K);
+    int didx = direct_indices[extract(key, 32, S)];
+    if (didx & 0x80000000)
+      return didx & 0x7fffffff;
 
-    while (bits & (1UL << v)) {
-      //      std::cout << "=== internal node\n";
+    uint32_t cur = didx;
+    uint64_t bits = children[didx].bits;
+    uint32_t v = extract(key, 32 - S, K);
+    uint32_t offset = S + K;
+
+    do {
       cur = children[cur].base1 + popcnt(bits, v);
       bits = children[cur].bits;
-      offset += K;
       v = extract(key, 32 - offset, K);
-    }
+      offset += K;
+    } while (bits & (1UL << v));
 
     Node c = children[cur];
     int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
@@ -206,7 +217,6 @@ private:
   std::vector<uint32_t> leaves;
   std::vector<uint32_t> direct_indices;
 };
-#endif
 
 void assert_(uint32_t expected, uint32_t actual, const std::string &code) {
   if (expected == actual) {
