@@ -131,6 +131,12 @@ public:
     return leaves[c.base0 + count - 1];
  }
 
+  void info() {
+    std::cout << "inodes=" << children.size()
+              << "\nleaves=" << leaves.size()
+              << "\n";
+  }
+
   void dump() {
     std::cout << "Children:\n";
     for (Node &node : children)
@@ -264,7 +270,7 @@ static void test2() {
     trie.insert(range.addr, range.masklen, range.val);
 
   Poptrie ptrie(trie);
-  // ptrie.dump();
+  ptrie.dump();
 
   auto find = [&](uint32_t addr) -> uint32_t {
                 for (int i = ranges.size() - 1; i >= 0; i--)
@@ -274,19 +280,20 @@ static void test2() {
               };
 
   for (Range &range : ranges) {
+    uint32_t end = range.addr + (1L << (32 - range.masklen)) - 1;
     std::cout << "range.addr =" << std::bitset<32>(range.addr) << "/" << range.masklen << "\n";
-    std::cout << "range.addr2=" << std::bitset<32>(range.addr + (1L << (32 - range.masklen)) - 1) << "/" << range.masklen << "\n";
-    uint32_t expected = find(range.addr);
-    assert(expected, ptrie.lookup(range.addr));
-    assert(expected, ptrie.lookup(range.addr + (1L << (32 - range.masklen)) - 1));
+    std::cout << "range.addr2=" << std::bitset<32>(end) << "/" << range.masklen << "\n";
+    assert(find(range.addr), ptrie.lookup(range.addr));
+    assert(find(end), ptrie.lookup(end));
   }
 }
 
+static constexpr int repeat = 10;
+
 __attribute__((unused))
 static std::chrono::microseconds bench(volatile uint32_t *x, std::vector<uint32_t> &random) {
-  high_resolution_clock::time_point t1 = high_resolution_clock::now();
   std::vector<Range> ranges;
-  for (int i = 0; i < 100*1000; i++)
+  for (int i = 0; i < 84000; i++)
     ranges.push_back(create_random_range());
 
   std::stable_sort(ranges.begin(), ranges.end(),
@@ -298,24 +305,32 @@ static std::chrono::microseconds bench(volatile uint32_t *x, std::vector<uint32_
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
   Poptrie ptrie(trie);
+  ptrie.info();
 
-
+  high_resolution_clock::time_point t1 = high_resolution_clock::now();
   uint32_t sum = 0;
-  for (uint32_t addr : random)
-    sum += ptrie.lookup(addr);
+  for (int i = 0; i < repeat; i++)
+    for (uint32_t addr : random)
+      sum += ptrie.lookup(addr);
   *x = sum;
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
   return std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
 }
 
 int main() {
+#if 0
   static std::uniform_int_distribution<uint32_t> dist1(0, UINT32_MAX);
   std::vector<uint32_t> random;
-  for (int i = 0; i < 1000*1000; i++)
+  for (int i = 0; i < 10*1000*1000; i++)
     random.push_back(dist1(rand_engine));
 
   volatile uint32_t sum = 0;
   std::chrono::microseconds dur = bench(&sum, random);
   printf("OK %ld μs\n", dur.count());
+  printf("OK %fMlps\n", (double)(random.size() * repeat) / ((double)dur.count() / 1000 / 1000) / 1000 / 1000);
   return sum;
+#else
+  test2();
+  std::cout << "OK\n";
+#endif
 }
