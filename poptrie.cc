@@ -1,4 +1,6 @@
 #include <iostream>
+#include <cassert>
+#include <cstring>
 #include <chrono>
 #include <algorithm>
 #include <cstdio>
@@ -114,16 +116,18 @@ private:
 class Poptrie {
 public:
   Poptrie(Trie &from) {
-    for (int i = 0; i < from.roots.size(); i++) {
-      if (node.is_leaf) {
-        direct_indices[i] = node.val | 0x80000000;
+    memset(direct_indices, 0, sizeof(direct_indices));
+
+    for (int i = 0; i < (1<<S); i++) {
+      if (from.roots[i].is_leaf) {
+        direct_indices[i] = from.roots[i].val | 0x80000000;
         continue;
       }
       
       int idx = children.size();
       direct_indices[i] = idx;
       children.push_back({});
-      import(&from.roots[i], idx);
+      import(from.roots[i], idx);
     }
   }
 
@@ -133,16 +137,17 @@ public:
       return didx & 0x7fffffff;
 
     uint32_t cur = didx;
-    uint64_t bits = children[didx].bits;
+    uint64_t bits = children[cur].bits;
     uint32_t v = extract(key, 32 - S, K);
     uint32_t offset = S + K;
 
-    do {
+    while (bits & (1UL << v)) {
+      std::cout << "cur=" << cur << "\n";
       cur = children[cur].base1 + popcnt(bits, v);
       bits = children[cur].bits;
       v = extract(key, 32 - offset, K);
       offset += K;
-    } while (bits & (1UL << v));
+    } 
 
     Node c = children[cur];
     int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
@@ -183,6 +188,7 @@ private:
   };
 
   void import(Trie::Node &from, int idx) {
+    assert(from.children.size() == (1<<K));
     int start = children.size();
 
     for (Trie::Node &node : from.children)
@@ -215,7 +221,7 @@ private:
 
   std::vector<Node> children;
   std::vector<uint32_t> leaves;
-  std::vector<uint32_t> direct_indices;
+  uint32_t direct_indices[1<<S];
 };
 
 void assert_(uint32_t expected, uint32_t actual, const std::string &code) {
@@ -227,7 +233,7 @@ void assert_(uint32_t expected, uint32_t actual, const std::string &code) {
   }
 }
 
-#define assert(expected, actual) \
+#define ASSERT(expected, actual) \
   assert_(expected, actual, #actual)
 
 __attribute__((unused))
@@ -239,25 +245,23 @@ static void test() {
 
   // trie.dump();
 
-  assert(3, trie.lookup(0b11));
-  assert(3, trie.lookup(0b1));
-  assert(3, trie.lookup(0x01234567));
-  assert(5, trie.lookup(0x80000010));
-  assert(8, trie.lookup(0x80010000));
-  assert(8, trie.lookup(0x8001ffff));
-  assert(5, trie.lookup(0x80020000));
+  ASSERT(3, trie.lookup(0b11));
+  ASSERT(3, trie.lookup(0b1));
+  ASSERT(3, trie.lookup(0x01234567));
+  ASSERT(5, trie.lookup(0x80000010));
+  ASSERT(8, trie.lookup(0x80010000));
+  ASSERT(8, trie.lookup(0x8001ffff));
+  ASSERT(5, trie.lookup(0x80020000));
 
-#if 0
   Poptrie ptrie(trie);
   ptrie.dump();
-  assert(3, ptrie.lookup(0b11));
-  assert(3, ptrie.lookup(0b1));
-  assert(3, ptrie.lookup(0x01234567));
-  assert(5, ptrie.lookup(0x80000010));
-  assert(8, ptrie.lookup(0x80010000));
-  assert(8, ptrie.lookup(0x8001ffff));
-  assert(5, ptrie.lookup(0x80020000));
-#endif
+  ASSERT(3, ptrie.lookup(0b11));
+  ASSERT(3, ptrie.lookup(0b1));
+  ASSERT(3, ptrie.lookup(0x01234567));
+  ASSERT(5, ptrie.lookup(0x80000010));
+  ASSERT(8, ptrie.lookup(0x80010000));
+  ASSERT(8, ptrie.lookup(0x8001ffff));
+  ASSERT(5, ptrie.lookup(0x80020000));
 }
 
 struct Range {
@@ -274,15 +278,15 @@ static bool in_range(Range &range, uint32_t addr) {
 static Range create_random_range() {
   static std::uniform_int_distribution<uint32_t> dist1(0, UINT32_MAX);
   static std::uniform_int_distribution<uint32_t> dist2(8, 30);
+  static std::uniform_int_distribution<uint32_t> dist3(0, 1<<30);
 
   uint32_t addr = dist1(rand_engine);
   int masklen = dist2(rand_engine);
-  uint32_t val = dist1(rand_engine);
+  uint32_t val = dist3(rand_engine);
   addr = addr & ~((1L << (32 - masklen)) - 1);
   return {addr, masklen, val};
 }
 
-#if 0
 __attribute__((unused))
 static void test2() {
   std::vector<Range> ranges;
@@ -312,11 +316,10 @@ static void test2() {
     uint32_t end = range.addr + (1L << (32 - range.masklen)) - 1;
     std::cout << "range.addr =" << std::bitset<32>(range.addr) << "/" << range.masklen << "\n";
     std::cout << "range.addr2=" << std::bitset<32>(end) << "/" << range.masklen << "\n";
-    assert(find(range.addr), ptrie.lookup(range.addr));
-    assert(find(end), ptrie.lookup(end));
+    ASSERT(find(range.addr), ptrie.lookup(range.addr));
+    ASSERT(find(end), ptrie.lookup(end));
   }
 }
-#endif
 
 static constexpr int repeat = 10;
 
@@ -334,8 +337,8 @@ static std::chrono::microseconds bench(volatile uint32_t *x, std::vector<uint32_
   Trie trie;
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
-  //  Poptrie ptrie(trie);
-  //  ptrie.info();
+  Poptrie ptrie(trie);
+  ptrie.info();
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
   uint32_t sum = 0;
@@ -360,7 +363,7 @@ int main() {
   printf("OK %fMlps\n", (double)(random.size() * repeat) / ((double)dur.count() / 1000 / 1000) / 1000 / 1000);
   return sum;
 #else
-  test();
+  test2();
   std::cout << "OK\n";
   return 0;
 #endif
