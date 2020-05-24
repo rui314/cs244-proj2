@@ -16,6 +16,7 @@ class Trie;
 class Poptrie;
 
 constexpr int K = 6;
+constexpr int S = 12;
 
 static constexpr int power_of_two(int n) {
   int x = 1;
@@ -35,9 +36,18 @@ static int popcnt(uint64_t x, int len) {
 class Trie {
 public:
   void insert(uint32_t key, int key_len, uint32_t val) {
-    Node *cur = &root;
-    uint32_t bits = extract(key, 32, K);
-    int offset = K;
+    if (key_len <= S) {
+      for (int i = 0; i < (1L << (S - key_len)); i++) {
+        Node &node = roots[(key >> (32 - S)) + i];
+        node.val = val;
+        node.is_leaf = true;
+      }
+      return;
+    }
+
+    Node *cur = &roots[extract(key, 32, S)];
+    uint32_t bits = extract(key, 32 - S, K);
+    int offset = S + K;
 
     while (offset < key_len) {
       expand(cur);
@@ -55,8 +65,8 @@ public:
   }
 
   uint32_t lookup(uint32_t key) {
-    Node *cur = &root;
-    int offset = 0;
+    Node *cur = &roots[extract(key, 32, S)];
+    int offset = S;
     while (!cur->is_leaf) {
       int bits = extract(key, 32 - offset, K);
       offset += K;
@@ -65,7 +75,10 @@ public:
     return cur->val;
   }
 
-  void dump() { dump2(root, 0); }
+  void dump() {
+    for (Node &node : roots)
+      dump2(node, 0);
+  }
 
 private:
   friend Poptrie;
@@ -95,14 +108,15 @@ private:
       dump2(n, indent + 2);
   };
 
-  Node root;
+  Node roots[1<<S];
 };
 
+#if 0
 class Poptrie {
 public:
   Poptrie(Trie &trie) {
     children.resize(1);
-    import(trie.root, 0);
+    import(trie.roots, 0);
   }
 
   uint32_t lookup(uint32_t key) {
@@ -190,13 +204,15 @@ private:
 
   std::vector<Node> children;
   std::vector<uint32_t> leaves;
+  std::vector<uint32_t> direct_indices;
 };
+#endif
 
 void assert_(uint32_t expected, uint32_t actual, const std::string &code) {
   if (expected == actual) {
     std::cout << code << " => " << expected << "\n";
   } else {
-    std::cerr << code << " => " << expected << " expected, but got " << actual << "\n";
+    std::cout << code << " => " << expected << " expected, but got " << actual << "\n";
     exit(1);
   }
 }
@@ -211,7 +227,7 @@ static void test() {
   trie.insert(0x80000000, 1, 5);
   trie.insert(0x80010000, 16, 8);
 
-  trie.dump();
+  // trie.dump();
 
   assert(3, trie.lookup(0b11));
   assert(3, trie.lookup(0b1));
@@ -221,6 +237,7 @@ static void test() {
   assert(8, trie.lookup(0x8001ffff));
   assert(5, trie.lookup(0x80020000));
 
+#if 0
   Poptrie ptrie(trie);
   ptrie.dump();
   assert(3, ptrie.lookup(0b11));
@@ -230,6 +247,7 @@ static void test() {
   assert(8, ptrie.lookup(0x80010000));
   assert(8, ptrie.lookup(0x8001ffff));
   assert(5, ptrie.lookup(0x80020000));
+#endif
 }
 
 struct Range {
@@ -254,6 +272,7 @@ static Range create_random_range() {
   return {addr, masklen, val};
 }
 
+#if 0
 __attribute__((unused))
 static void test2() {
   std::vector<Range> ranges;
@@ -287,6 +306,7 @@ static void test2() {
     assert(find(end), ptrie.lookup(end));
   }
 }
+#endif
 
 static constexpr int repeat = 10;
 
@@ -304,14 +324,14 @@ static std::chrono::microseconds bench(volatile uint32_t *x, std::vector<uint32_
   Trie trie;
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
-  Poptrie ptrie(trie);
-  ptrie.info();
+  //  Poptrie ptrie(trie);
+  //  ptrie.info();
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
   uint32_t sum = 0;
   for (int i = 0; i < repeat; i++)
     for (uint32_t addr : random)
-      sum += ptrie.lookup(addr);
+      sum += trie.lookup(addr);
   *x = sum;
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
   return std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
@@ -330,7 +350,8 @@ int main() {
   printf("OK %fMlps\n", (double)(random.size() * repeat) / ((double)dur.count() / 1000 / 1000) / 1000 / 1000);
   return sum;
 #else
-  test2();
+  test();
   std::cout << "OK\n";
+  return 0;
 #endif
 }
