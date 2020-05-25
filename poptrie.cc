@@ -677,7 +677,7 @@ static std::chrono::microseconds bench(uint32_t *x, Xorshift rand, uint64_t repe
   uint32_t sum = 0;
   for (uint64_t i = 0; i < repeat; i++)
     sum += ptrie.lookup(rand.next());
-  *x = sum;
+  *x += sum;
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
   return std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
 }
