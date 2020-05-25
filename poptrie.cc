@@ -26,7 +26,7 @@ class Poptrie;
 class Poptrie2;
 
 constexpr int K = 6;
-constexpr int S = 16;
+constexpr int S = 18;
 
 __attribute__((always_inline))
 static inline uint32_t extract(uint32_t bits, int start, int len) {
