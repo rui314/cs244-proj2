@@ -312,9 +312,6 @@ private:
       }
     }
 
-    if (leaf_only_node.size() % 2)
-      leaf_only_node.push_back(0);
-
     *(uint64_t *)&leaf_only_node[start] = leafbits;
   }
 
