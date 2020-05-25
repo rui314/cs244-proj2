@@ -449,7 +449,7 @@ private:
 
 template <class T>
 __attribute__((unused))
-static std::chrono::microseconds bench(volatile uint32_t *x, Xorshift rand, uint64_t repeat, bool show_info) {
+static std::chrono::microseconds bench(Xorshift rand, uint64_t repeat, bool show_info) {
   Trie trie;
   for (Range &range : ranges52)
     trie.insert(range.addr, range.masklen, range.val);
@@ -459,10 +459,8 @@ static std::chrono::microseconds bench(volatile uint32_t *x, Xorshift rand, uint
     ptrie.info();
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
-  uint32_t sum = 0;
   for (uint64_t i = 0; i < repeat; i++)
-    sum += ptrie.lookup(rand.next());
-  *x += sum;
+    ptrie.lookup(rand.next());
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
   return std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
 }
@@ -482,22 +480,21 @@ int main() {
   static std::uniform_int_distribution<uint32_t> dist1(0, 1L<<31);
   Xorshift rand(dist1(rand_engine));
 
-  volatile uint32_t sum = 0;
   std::chrono::microseconds dur;
   uint64_t repeat = 300*1000*1000;
 
   std::cout << "Look up random " << repeat << " keys for each test. "
             << "S=" << S << " K=" << K << "\n";
 
-  dur = bench<Poptrie>(&sum, rand, repeat, false);
-  dur = bench<Poptrie2>(&sum, rand, repeat, false);
+  dur = bench<Poptrie>(rand, repeat, false);
+  dur = bench<Poptrie2>(rand, repeat, false);
 
   std::cout << "Regular Poptrie:  ";
-  dur = bench<Poptrie>(&sum, rand, repeat, false);
+  dur = bench<Poptrie>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   std::cout << "Modified Poptrie: ";
-  dur = bench<Poptrie2>(&sum, rand, repeat, false);
+  dur = bench<Poptrie2>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
   return 0;
 #else
