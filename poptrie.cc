@@ -28,13 +28,6 @@ class Poptrie2;
 constexpr int K = 6;
 constexpr int S = 18;
 
-static constexpr int power_of_two(int n) {
-  int x = 1;
-  for (int i = 0; i < n; i++)
-    x *= 2;
-  return x;
-}
-
 __attribute__((always_inline))
 static inline uint32_t extract(uint32_t bits, int start, int len) {
   return (bits >> (start - len)) & ((1L<<len) - 1);
