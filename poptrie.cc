@@ -706,7 +706,7 @@ static std::chrono::microseconds bench2(uint32_t *x, std::vector<uint32_t> &rand
 }
 
 int main() {
-#if 1
+#if 0
   static std::uniform_int_distribution<uint32_t> dist1(0, 1<<30);
   std::vector<uint32_t> random;
   for (int i = 0; i < 10*1000*1000; i++)
