@@ -473,11 +473,11 @@ int main() {
   dur = bench<Poptrie2>(&sum, rand, repeat, false);
 
   dur = bench<Poptrie>(&sum, rand, repeat, true);
-  printf("OK %ld μs\n", dur.count());
+  printf("OK %ld μs\n", (long)dur.count());
   printf("OK %fMlps\n\n", (double)repeat / (double)dur.count());
 
   dur = bench<Poptrie2>(&sum, rand, repeat, true);
-  printf("OK %ld μs\n", dur.count());
+  printf("OK %ld μs\n", (long)dur.count());
   printf("OK %fMlps\n", (double)repeat / (double)dur.count());
   return 0;
 #else
