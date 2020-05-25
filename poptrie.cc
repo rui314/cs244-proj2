@@ -463,15 +463,40 @@ static std::chrono::microseconds bench(uint32_t *x, std::vector<uint32_t> &rando
   return std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
 }
 
+__attribute__((unused))
+static std::chrono::microseconds bench2(uint32_t *x, std::vector<uint32_t> &random) {
+  std::vector<Range> ranges;
+  for (uint32_t i = 0; testset[i].ip && testset[i].masklen; i++)
+    ranges.push_back({testset[i].ip, testset[i].masklen, i});
+
+  std::stable_sort(ranges.begin(), ranges.end(),
+                   [](const Range &a, const Range &b) {
+                     return a.masklen < b.masklen;
+                   });
+
+  Mytrie trie;
+  for (Range &range : ranges)
+    trie.insert(range.addr, range.masklen, range.val);
+
+  high_resolution_clock::time_point t1 = high_resolution_clock::now();
+  uint32_t sum = 0;
+  for (int i = 0; i < repeat; i++)
+    for (uint32_t addr : random)
+      sum += trie.lookup(addr);
+  *x = sum;
+  high_resolution_clock::time_point t2 = high_resolution_clock::now();
+  return std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
+}
+
 int main() {
-#if 0
+#if 1
   static std::uniform_int_distribution<uint32_t> dist1(0, 1<<30);
   std::vector<uint32_t> random;
   for (int i = 0; i < 10*1000*1000; i++)
     random.push_back(dist1(rand_engine));
 
   uint32_t sum = 0;
-  std::chrono::microseconds dur = bench(&sum, random);
+  std::chrono::microseconds dur = bench2(&sum, random);
   printf("OK %ld μs\n", dur.count());
   printf("OK %fMlps\n", (double)(random.size() * repeat) / ((double)dur.count() / 1000 / 1000) / 1000 / 1000);
   return sum;
