@@ -159,14 +159,6 @@ public:
     for (int i = 0; i < 64; i++)
       std::cout << " " << count[i];
     std::cout << "\n";
-
-    int count2[64] = {0};
-    for (Node &node : children)
-      count2[__builtin_popcountl(node.bits)]++;
-    std::cout << "count2:";
-    for (int i = 0; i < 64; i++)
-      std::cout << " " << count2[i];
-    std::cout << "\n";
   }
 
 private:
