@@ -268,15 +268,7 @@ public:
         continue;
       }
       
-      bool leaf_only = true;
-      for (Trie::Node &node : from.roots[i].children) {
-        if (!node.is_leaf) {
-          leaf_only = false;
-          break;
-        }
-      }
-
-      if (leaf_only) {
+      if (is_leaf_only(from.roots[i])) {
         if (leaf_only_node.size() % 2)
           leaf_only_node.push_back(0);
         int idx = leaf_only_node.size();
@@ -387,6 +379,13 @@ private:
     uint32_t base0 = 0;
     uint32_t base1 = 0;
   };
+
+  bool is_leaf_only(Trie::Node &node) {
+    for (Trie::Node &node : node.children)
+      if (!node.is_leaf)
+        return false;
+    return true;
+  }
 
   void import(Trie::Node &from, int idx) {
     assert(from.children.size() == (1<<K));
@@ -736,7 +735,7 @@ static std::chrono::microseconds bench2(uint32_t *x, std::vector<uint32_t> &rand
 }
 
 int main() {
-#if 1
+#if 0
   static std::uniform_int_distribution<uint32_t> dist1(0, 1<<30);
   std::vector<uint32_t> random;
   for (int i = 0; i < 10*1000*1000; i++)
