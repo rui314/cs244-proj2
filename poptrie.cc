@@ -26,7 +26,7 @@ class Poptrie;
 class OptimizedPoptrie;
 
 constexpr int K = 6;
-constexpr int S = 16;
+constexpr int S = 18;
 
 static constexpr int power_of_two(int n) {
   int x = 1;
@@ -93,11 +93,6 @@ public:
     return cur->val;
   }
 
-  void dump() {
-    for (Node &node : roots)
-      dump2(node, 0);
-  }
-
 private:
   friend Poptrie;
   friend OptimizedPoptrie;
@@ -117,15 +112,6 @@ private:
       n.val = cur->val;
     cur->is_leaf = false;
   }
-
-  void dump2(Node &cur, int indent) {
-    if (cur.is_leaf) {
-      std::cout << std::string(indent, ' ') << cur.val << "\n";
-      return;
-    }
-    for (Node &n : cur.children)
-      dump2(n, indent + 2);
-  };
 
   std::vector<Node> roots;
 };
@@ -180,6 +166,9 @@ public:
   void info() {
     std::cout << "inodes=" << children.size()
               << "\nleaves=" << leaves.size()
+              << " size=" << (children.size() * sizeof(children[0]) +
+                              leaves.size() * sizeof(leaves[0]) +
+                              direct_indices.size() * sizeof(direct_indices[0]))
               << "\n";
 
     int count[64] = {0};
@@ -197,18 +186,6 @@ public:
     std::cout << "count2:";
     for (int i = 0; i < 64; i++)
       std::cout << " " << count2[i];
-    std::cout << "\n";
-  }
-
-  void dump() {
-    std::cout << "Children:\n";
-    for (Node &node : children)
-      std::cout << " bits=" << std::bitset<64>(node.bits)
-                << " leafbits=" << std::bitset<64>(node.leafbits)
-                << " base0=" << node.base0 << " base1=" << node.base1 << "\n";
-    std::cout << "Leaves:";
-    for (uint32_t x : leaves)
-      std::cout << " " << x;
     std::cout << "\n";
   }
 
@@ -320,7 +297,11 @@ public:
 
   void info() {
     std::cout << "inodes=" << children.size()
-              << "\nleaves=" << leaves.size()
+              << " leaves=" << leaves.size()
+              << " size=" << (children.size() * sizeof(children[0]) +
+                              leaves.size() * sizeof(leaves[0]) +
+                              direct_indices.size() * sizeof(direct_indices[0]) +
+                              leaf_only_node.size() * sizeof(leaf_only_node[0]))
               << "\n";
 
     int count[64] = {0};
@@ -338,18 +319,6 @@ public:
     std::cout << "count2:";
     for (int i = 0; i < 64; i++)
       std::cout << " " << count2[i];
-    std::cout << "\n";
-  }
-
-  void dump() {
-    std::cout << "Children:\n";
-    for (Node &node : children)
-      std::cout << " bits=" << std::bitset<64>(node.bits)
-                << " leafbits=" << std::bitset<64>(node.leafbits)
-                << " base0=" << node.base0 << " base1=" << node.base1 << "\n";
-    std::cout << "Leaves:";
-    for (uint32_t x : leaves)
-      std::cout << " " << x;
     std::cout << "\n";
   }
 
@@ -528,7 +497,10 @@ public:
  }
 
   void info() {
-    std::cout << "mytrie: node=" << nodes.size() << " leaves=" << leaves.size() << "\n";
+    std::cout << "mytrie: node=" << nodes.size()
+              << " leaves=" << leaves.size()
+              << " size=" << (nodes.size() * sizeof(nodes[0]) + leaves.size() * sizeof(leaves[0]))
+              << "\n";
   }
 
 private:
@@ -566,12 +538,10 @@ void assert_(uint32_t expected, uint32_t actual, const std::string &code) {
 
 __attribute__((unused))
 static void test1() {
-  Mytrie trie;
+  Trie trie;
   trie.insert(0, 1, 3);
   trie.insert(0x80000000, 1, 5);
   trie.insert(0x80010000, 16, 8);
-
-  // trie.dump();
 
   ASSERT(3, trie.lookup(0b11));
   ASSERT(3, trie.lookup(0b1));
@@ -581,9 +551,7 @@ static void test1() {
   ASSERT(8, trie.lookup(0x8001ffff));
   ASSERT(5, trie.lookup(0x80020000));
 
-  /*
   Poptrie ptrie(trie);
-  ptrie.dump();
   ASSERT(3, ptrie.lookup(0b11));
   ASSERT(3, ptrie.lookup(0b1));
   ASSERT(3, ptrie.lookup(0x01234567));
@@ -591,7 +559,6 @@ static void test1() {
   ASSERT(8, ptrie.lookup(0x80010000));
   ASSERT(8, ptrie.lookup(0x8001ffff));
   ASSERT(5, ptrie.lookup(0x80020000));
-  */
 }
 
 struct Range {
@@ -634,7 +601,6 @@ static void test2() {
     trie.insert(range.addr, range.masklen, range.val);
 
   OptimizedPoptrie ptrie(trie);
-  // ptrie.dump();
 
   auto find = [&](uint32_t addr) -> uint32_t {
                 for (int i = ranges.size() - 1; i >= 0; i--)
@@ -699,7 +665,7 @@ static std::chrono::microseconds bench(uint32_t *x, std::vector<uint32_t> &rando
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
 
-  OptimizedPoptrie ptrie(trie);
+  Poptrie ptrie(trie);
   ptrie.info();
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
@@ -740,7 +706,7 @@ static std::chrono::microseconds bench2(uint32_t *x, std::vector<uint32_t> &rand
 }
 
 int main() {
-#if 0
+#if 1
   static std::uniform_int_distribution<uint32_t> dist1(0, 1<<30);
   std::vector<uint32_t> random;
   for (int i = 0; i < 10*1000*1000; i++)
