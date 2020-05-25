@@ -453,7 +453,7 @@ private:
 
 template <class T>
 __attribute__((unused))
-static std::chrono::microseconds bench(uint32_t *x, Xorshift rand, uint64_t repeat) {
+static std::chrono::microseconds bench(volatile uint32_t *x, Xorshift rand, uint64_t repeat) {
   Trie trie;
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
@@ -480,7 +480,7 @@ int main() {
   static std::uniform_int_distribution<uint32_t> dist1(0, 1L<<31);
   Xorshift rand(dist1(rand_engine));
 
-  uint32_t sum = 0;
+  volatile uint32_t sum = 0;
   std::chrono::microseconds dur;
   uint64_t repeat = 300*1000*1000;
 
@@ -495,8 +495,7 @@ int main() {
   dur = bench<Poptrie2>(&sum, rand, repeat);
   printf("OK %ld μs\n", dur.count());
   printf("OK %fMlps\n", (double)repeat / (double)dur.count());
-
-  return sum;
+  return 0;
 #else
   test();
   std::cout << "OK\n";
