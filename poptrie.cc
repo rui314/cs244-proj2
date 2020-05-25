@@ -490,7 +490,7 @@ int main() {
 
   dur = bench<Poptrie>(&sum, rand, repeat);
   printf("OK %ld μs\n", dur.count());
-  printf("OK %fMlps\n\n", (double)repeat / ((double)dur.count() / 1000 / 1000) / 1000 / 1000);
+  printf("OK %fMlps\n\n", (double)repeat / (double)dur.count());
 
   dur = bench<Poptrie2>(&sum, rand, repeat);
   printf("OK %ld μs\n", dur.count());
