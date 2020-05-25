@@ -221,23 +221,18 @@ private:
 };
 
 class Poptrie2 {
-  enum {
-        DIRECT = 1,
-        LEAF_ONLY = 2,
-  };
-
 public:
   Poptrie2(Trie &from) {
     direct_indices.resize(1<<S);
 
     for (int i = 0; i < (1<<S); i++) {
       if (from.roots[i].is_leaf) {
-        direct_indices[i] = from.roots[i].val | (DIRECT << 30);
+        direct_indices[i] = from.roots[i].val | 0x80000000;
         continue;
       }
       
       if (is_leaf_only(from.roots[i])) {
-        direct_indices[i] = leaf_only_node.size() | (LEAF_ONLY << 30);
+        direct_indices[i] = leaf_only_node.size() | 0x40000000;
         import_leaf_only_node(from.roots[i]);
         continue;
       }
@@ -251,10 +246,10 @@ public:
 
   uint32_t lookup(uint32_t key) {
     uint32_t didx = direct_indices[extract(key, 32, S)];
-    if ((didx >> 30) == DIRECT)
+    if (didx & 0x80000000)
       return didx & 0x3fffffff;
 
-    if ((didx >> 30) == LEAF_ONLY) {
+    if (didx & 0x40000000) {
       uint32_t idx = didx & 0x3fffffff;
       uint64_t leafbits = *(uint64_t *)&leaf_only_node[idx];
       uint64_t v = extract(key, 32 - S, K);
@@ -514,7 +509,7 @@ int main() {
 
   uint32_t sum = 0;
   std::chrono::microseconds dur;
-  uint64_t repeat = 10*1000*1000;
+  uint64_t repeat = 300*1000*1000;
 
   dur = bench<Poptrie>(&sum, rand, repeat);
   dur = bench<Poptrie2>(&sum, rand, repeat);
