@@ -401,19 +401,19 @@ static bool in_range(Range &range, uint32_t addr) {
 __attribute__((unused))
 static void test() {
   Trie trie;
-  for (Range &range : ranges46)
+  for (Range &range : ranges52)
     trie.insert(range.addr, range.masklen, range.val);
 
   Poptrie ptrie(trie);
 
   auto find = [&](uint32_t addr) -> uint32_t {
-                for (int i = ranges46.size() - 1; i >= 0; i--)
-                  if (in_range(ranges46[i], addr))
-                    return ranges46[i].val;
+                for (int i = ranges52.size() - 1; i >= 0; i--)
+                  if (in_range(ranges52[i], addr))
+                    return ranges52[i].val;
                 return 0;
               };
 
-  for (Range &range : ranges46) {
+  for (Range &range : ranges52) {
     uint32_t end = range.addr + (1L << (32 - range.masklen)) - 1;
     ASSERT(find(range.addr), ptrie.lookup(range.addr));
     ASSERT(find(end), ptrie.lookup(end));
@@ -439,7 +439,7 @@ template <class T>
 __attribute__((unused))
 static std::chrono::microseconds bench(volatile uint32_t *x, Xorshift rand, uint64_t repeat, bool show_info) {
   Trie trie;
-  for (Range &range : ranges46)
+  for (Range &range : ranges52)
     trie.insert(range.addr, range.masklen, range.val);
 
   T ptrie(trie);
@@ -456,7 +456,7 @@ static std::chrono::microseconds bench(volatile uint32_t *x, Xorshift rand, uint
 }
 
 int main() {
-  std::stable_sort(ranges46.begin(), ranges46.end(),
+  std::stable_sort(ranges52.begin(), ranges52.end(),
                    [](const Range &a, const Range &b) {
                      return a.masklen < b.masklen;
                    });
