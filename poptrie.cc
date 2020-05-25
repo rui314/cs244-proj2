@@ -339,8 +339,8 @@ static constexpr int repeat = 10;
 __attribute__((unused))
 static std::chrono::microseconds bench(uint32_t *x, std::vector<uint32_t> &random) {
   std::vector<Range> ranges;
-  for (int i = 0; i < 84000; i++)
-    ranges.push_back(create_random_range());
+  for (uint32_t i = 0; testset[i].ip && testset[i].masklen; i++)
+    ranges.push_back({testset[i].ip, testset[i].masklen, i});
 
   std::stable_sort(ranges.begin(), ranges.end(),
                    [](const Range &a, const Range &b) {
@@ -365,7 +365,7 @@ static std::chrono::microseconds bench(uint32_t *x, std::vector<uint32_t> &rando
 }
 
 int main() {
-#if 0
+#if 1
   static std::uniform_int_distribution<uint32_t> dist1(0, 1<<30);
   std::vector<uint32_t> random;
   for (int i = 0; i < 10*1000*1000; i++)
