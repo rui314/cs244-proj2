@@ -324,12 +324,9 @@ public:
     if (node.is_direct)
       return node.base;
 
-    int idx = key & ((1L << (len2 + len3)) - 1);
-    return leaves[node.base + idx];
-
-    int mid = extract(key, len1, len2);
-    // int count = __builtin_popcountl(node.bits & ((2L << mid) - 1));
-    // int idx1 = (count - 1) * (1L << len3);
+    int mid = extract(key, 32 - len1, len2);
+    //    int count = __builtin_popcountl(node.bits & ((2L << mid) - 1));
+    //    int idx1 = (count - 1) * (1L << len3);
     int idx1 = mid * (1L << len3);
     int idx2 = key & ((1L << len3) - 1);
     return leaves[node.base + idx1 + idx2];
