@@ -516,11 +516,11 @@ int main() {
   std::cout << "\n";
 
   dur = bench<Poptrie>(&sum, rand, repeat);
-  printf("OK %lld μs\n", dur.count());
+  printf("OK %ld μs\n", dur.count());
   printf("OK %fMlps\n\n", (double)repeat / ((double)dur.count() / 1000 / 1000) / 1000 / 1000);
 
   dur = bench<Poptrie2>(&sum, rand, repeat);
-  printf("OK %lld μs\n", dur.count());
+  printf("OK %ld μs\n", dur.count());
   printf("OK %fMlps\n", (double)repeat / ((double)dur.count() / 1000 / 1000) / 1000 / 1000);
 
   return sum;
