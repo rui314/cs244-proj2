@@ -23,7 +23,7 @@ std::default_random_engine rand_engine;
 
 class Trie;
 class Poptrie;
-class OptimizedPoptrie;
+class Poptrie2;
 
 constexpr int K = 6;
 constexpr int S = 18;
@@ -95,7 +95,7 @@ public:
 
 private:
   friend Poptrie;
-  friend OptimizedPoptrie;
+  friend Poptrie2;
 
   struct Node {
     std::vector<Node> children;
@@ -227,14 +227,14 @@ private:
   std::vector<uint32_t> direct_indices;
 };
 
-class OptimizedPoptrie {
+class Poptrie2 {
   enum {
         DIRECT = 1,
         LEAF_ONLY = 2,
   };
 
 public:
-  OptimizedPoptrie(Trie &from) {
+  Poptrie2(Trie &from) {
     direct_indices.resize(1<<S);
 
     for (int i = 0; i < (1<<S); i++) {
@@ -591,7 +591,7 @@ static void test2() {
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
 
-  OptimizedPoptrie ptrie(trie);
+  Poptrie ptrie(trie);
 
   auto find = [&](uint32_t addr) -> uint32_t {
                 for (int i = ranges.size() - 1; i >= 0; i--)
@@ -639,10 +639,24 @@ static void test3() {
   }
 }
 
-static constexpr int repeat = 30;
+class Xorshift {
+public:
+  Xorshift(uint32_t seed) : state(seed) {}
 
+  uint32_t next() {
+    state ^= state << 13;
+    state ^= state >> 17;
+    state ^= state << 5;
+    return state;
+  }
+
+private:
+  uint32_t state;
+};
+
+template <class T>
 __attribute__((unused))
-static std::chrono::microseconds bench(uint32_t *x, std::vector<uint32_t> &random) {
+static std::chrono::microseconds bench(uint32_t *x, Xorshift &rand, uint64_t repeat) {
   std::vector<Range> ranges;
   for (uint32_t i = 0; testset[i].ip && testset[i].masklen; i++)
     ranges.push_back({testset[i].ip, testset[i].masklen, i});
@@ -656,41 +670,13 @@ static std::chrono::microseconds bench(uint32_t *x, std::vector<uint32_t> &rando
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
 
-  Poptrie ptrie(trie);
-  ptrie.info();
+  T ptrie(trie);
+  // ptrie.info();
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
   uint32_t sum = 0;
-  for (int i = 0; i < repeat; i++)
-    for (uint32_t addr : random)
-      sum += ptrie.lookup(addr);
-  *x = sum;
-  high_resolution_clock::time_point t2 = high_resolution_clock::now();
-  return std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
-}
-
-__attribute__((unused))
-static std::chrono::microseconds bench2(uint32_t *x, std::vector<uint32_t> &random) {
-  std::vector<Range> ranges;
-  for (uint32_t i = 0; testset[i].ip && testset[i].masklen; i++)
-    ranges.push_back({testset[i].ip, testset[i].masklen, i});
-
-  std::stable_sort(ranges.begin(), ranges.end(),
-                   [](const Range &a, const Range &b) {
-                     return a.masklen < b.masklen;
-                   });
-
-  Mytrie trie;
-  for (Range &range : ranges)
-    trie.insert(range.addr, range.masklen, range.val);
-  trie.finalize();
-  trie.info();
-
-  high_resolution_clock::time_point t1 = high_resolution_clock::now();
-  uint32_t sum = 0;
-  for (int i = 0; i < repeat; i++)
-    for (uint32_t addr : random)
-      sum += trie.lookup(addr);
+  for (uint64_t i = 0; i < repeat; i++)
+    sum += ptrie.lookup(rand.next());
   *x = sum;
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
   return std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
@@ -698,15 +684,24 @@ static std::chrono::microseconds bench2(uint32_t *x, std::vector<uint32_t> &rand
 
 int main() {
 #if 1
-  static std::uniform_int_distribution<uint32_t> dist1(0, 1<<30);
-  std::vector<uint32_t> random;
-  for (int i = 0; i < 10*1000*1000; i++)
-    random.push_back(dist1(rand_engine));
+  static std::uniform_int_distribution<uint32_t> dist1(0, 1L<<31);
+  Xorshift rand(dist1(rand_engine));
 
   uint32_t sum = 0;
-  std::chrono::microseconds dur = bench(&sum, random);
+  std::chrono::microseconds dur;
+  uint64_t repeat = 10*1000*1000;
+
+  dur = bench<Poptrie>(&sum, rand, repeat);
+  dur = bench<Poptrie2>(&sum, rand, repeat);
+
+  dur = bench<Poptrie>(&sum, rand, repeat);
   printf("OK %ld μs\n", dur.count());
-  printf("OK %fMlps\n", (double)(random.size() * repeat) / ((double)dur.count() / 1000 / 1000) / 1000 / 1000);
+  printf("OK %fMlps\n\n", (double)repeat / ((double)dur.count() / 1000 / 1000) / 1000 / 1000);
+
+  dur = bench<Poptrie2>(&sum, rand, repeat);
+  printf("OK %ld μs\n", dur.count());
+  printf("OK %fMlps\n", (double)repeat / ((double)dur.count() / 1000 / 1000) / 1000 / 1000);
+
   return sum;
 #else
   test2();
