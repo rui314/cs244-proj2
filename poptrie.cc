@@ -26,7 +26,7 @@ class Poptrie;
 class Poptrie2;
 
 constexpr int K = 6;
-constexpr int S = 18;
+constexpr int S = 20;
 
 static constexpr int power_of_two(int n) {
   int x = 1;
