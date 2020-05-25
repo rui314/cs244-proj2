@@ -128,7 +128,7 @@ public:
   }
 
   uint32_t lookup(uint32_t key) {
-    int didx = direct_indices[extract(key, 32, S)];
+    int didx = direct_indices[key >> (32 - S)];
     if (didx & 0x80000000)
       return didx & 0x7fffffff;
 
@@ -245,7 +245,7 @@ public:
   }
 
   uint32_t lookup(uint32_t key) {
-    uint32_t didx = direct_indices[extract(key, 32, S)];
+    uint32_t didx = direct_indices[key >> (32 - S)];
     if (didx & 0x80000000)
       return didx & 0x3fffffff;
 
