@@ -158,7 +158,7 @@ public:
 
   void info() {
     std::cout << "inodes=" << children.size()
-              << "\nleaves=" << leaves.size()
+              << " leaves=" << leaves.size()
               << " size=" << (children.size() * sizeof(children[0]) +
                               leaves.size() * sizeof(leaves[0]) +
                               direct_indices.size() * sizeof(direct_indices[0]))
@@ -503,7 +503,7 @@ static std::chrono::microseconds bench(uint32_t *x, Xorshift rand, uint64_t repe
     trie.insert(range.addr, range.masklen, range.val);
 
   T ptrie(trie);
-  // ptrie.info();
+  ptrie.info();
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
   uint32_t sum = 0;
@@ -525,6 +525,7 @@ int main() {
 
   dur = bench<Poptrie>(&sum, rand, repeat);
   dur = bench<Poptrie2>(&sum, rand, repeat);
+  std::cout << "\n";
 
   dur = bench<Poptrie>(&sum, rand, repeat);
   printf("OK %ld μs\n", dur.count());
