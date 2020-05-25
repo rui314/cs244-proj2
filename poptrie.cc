@@ -224,6 +224,10 @@ public:
         continue;
       }
 
+      // This is where the modified Poptrie is different from the
+      // original one. If a root node has no descendent child internal
+      // nodes (i.e. if all children are leaves), the children are
+      // stored to a different array.
       if (is_leaf_only(from.roots[i])) {
         direct_indices[i] = leaf_only_node.size() | 0x40000000;
         import_leaf_only_node(from.roots[i]);
@@ -302,6 +306,9 @@ private:
     return true;
   }
 
+  // Add a leaf-only root node to `leaf_only_node` vector.
+  // The bit vector and its leaf values are written to `leaf_only_node`
+  // vector next to each other for better locality.
   void import_leaf_only_node(Trie::Node &node) {
     int start = leaf_only_node.size();
     leaf_only_node.push_back(0);
