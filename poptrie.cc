@@ -10,6 +10,8 @@
 #include <cstdlib>
 #include <utility>
 
+using std::chrono::high_resolution_clock;
+
 struct Range {
   uint32_t addr;
   int masklen;
@@ -17,9 +19,6 @@ struct Range {
 };
 
 extern std::vector<Range> ranges;
-
-using std::chrono::high_resolution_clock;
-
 std::default_random_engine rand_engine;
 
 class Trie;
@@ -435,9 +434,9 @@ static void test() {
   Poptrie ptrie(trie);
 
   auto find = [&](uint32_t addr) -> uint32_t {
-                for (int i = range.size() - 1; i >= 0; i--)
-                  if (in_range(range[i], addr))
-                    return range[i].val;
+                for (int i = ranges.size() - 1; i >= 0; i--)
+                  if (in_range(ranges[i], addr))
+                    return ranges[i].val;
                 return 0;
               };
 
