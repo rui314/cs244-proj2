@@ -37,6 +37,9 @@ static inline int popcnt(uint64_t x, int len) {
   return __builtin_popcountl(x & ((1UL << len) - 1));
 }
 
+// A normal multi-way trie. It is hard to directly create a Poptrie,
+// so we construct a normal multi-way trie first and then convert it
+// to a Poptrie.
 class Trie {
 public:
   struct Node {
@@ -104,6 +107,7 @@ public:
   std::vector<Node> roots;
 };
 
+// A Poptrie implementation as explained in the paper.
 class Poptrie {
 public:
   Poptrie(Trie &from) {
@@ -208,6 +212,7 @@ private:
   std::vector<uint32_t> direct_indices;
 };
 
+// A modified version of Poptrie.
 class Poptrie2 {
 public:
   Poptrie2(Trie &from) {
