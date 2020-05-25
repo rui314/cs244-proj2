@@ -280,7 +280,7 @@ public:
       int sz = 1L << len3;
       for (int j = 1; j < (1L << len2); j++) {
         if (memcmp(&leaves[node.base + cur * sz], &leaves[node.base + j * sz], sz * sizeof(leaves[0])) == 0) {
-          dup[node.base + j] = true;
+          dup[i * (1L << len2) + j] = true;
         } else {
           cur = j;
         }
@@ -295,6 +295,7 @@ public:
       if (!dup[i])
         idx++;
     }
+    std::cout << "idx=" << (idx * 64 * 4) << "\n";
 
     for (int i = 0; i < (1L << len1); i++) {
       Node &node = nodes[i];
@@ -302,19 +303,20 @@ public:
         continue;
 
       for (int j = 0; j < (1L << len2); j++)
-        if (!dup[node.base + j])
+        if (!dup[i * (1L << len2) + j])
           node.bits = node.bits | (1L << j);
-      node.base = newidx[node.base];
+      node.base = newidx[node.base >> len3];
     }
 
     std::vector<uint32_t> new_leaves;
-    for (size_t i = 0; i < dup.size(); i++) {
-      if (dup[i])
-        continue;
+    for (size_t i = 0; i < dup.size(); i++)
+      if (!dup[i])
+        for (int j = 0; j < (1L << len3); j++)
+          new_leaves.push_back(leaves[i * (1L << len3) + j]);
 
-      for (int j = 0; j < (1L << len3); j++)
-        new_leaves.push_back(leaves[i * (1L << len3) + j]);
-    }
+    std::cout << "leaves.size=" << leaves.size()
+              << " new_leaves=" << new_leaves.size()
+              << "\n";
 
     leaves = new_leaves;
   }
@@ -327,10 +329,13 @@ public:
     int mid = extract(key, 32 - len1, len2);
     int count = __builtin_popcountl(node.bits & ((2L << mid) - 1));
     int idx1 = (count - 1) * (1L << len3);
-    // int idx1 = mid * (1L << len3);
     int idx2 = key & ((1L << len3) - 1);
     return leaves[node.base + idx1 + idx2];
  }
+
+  void info() {
+    std::cout << "mytrie: node=" << nodes.size() << " leaves=" << leaves.size() << "\n";
+  }
 
 private:
   struct Node {
@@ -527,6 +532,8 @@ static std::chrono::microseconds bench2(uint32_t *x, std::vector<uint32_t> &rand
   Mytrie trie;
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
+  trie.finalize();
+  trie.info();
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
   uint32_t sum = 0;
@@ -539,7 +546,7 @@ static std::chrono::microseconds bench2(uint32_t *x, std::vector<uint32_t> &rand
 }
 
 int main() {
-#if 0
+#if 1
   static std::uniform_int_distribution<uint32_t> dist1(0, 1<<30);
   std::vector<uint32_t> random;
   for (int i = 0; i < 10*1000*1000; i++)
