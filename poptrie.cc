@@ -12,6 +12,9 @@
 
 using std::chrono::high_resolution_clock;
 
+constexpr int K = 6;
+constexpr int S = 18;
+
 struct Range {
   uint32_t addr;
   int masklen;
@@ -24,9 +27,6 @@ std::default_random_engine rand_engine;
 class Trie;
 class Poptrie;
 class Poptrie2;
-
-constexpr int K = 6;
-constexpr int S = 18;
 
 static inline uint32_t extract(uint32_t bits, int start, int len) {
   return (bits >> (start - len)) & ((1L<<len) - 1);
@@ -113,7 +113,7 @@ public:
         direct_indices[i] = from.roots[i].val | 0x80000000;
         continue;
       }
-      
+
       int idx = children.size();
       direct_indices[i] = idx;
       children.push_back({});
@@ -136,7 +136,7 @@ public:
       bits = children[cur].bits;
       v = extract(key, 32 - offset, K);
       offset += K;
-    } 
+    }
 
     Node c = children[cur];
     int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
@@ -216,7 +216,7 @@ public:
         direct_indices[i] = from.roots[i].val | 0x80000000;
         continue;
       }
-      
+
       if (is_leaf_only(from.roots[i])) {
         direct_indices[i] = leaf_only_node.size() | 0x40000000;
         import_leaf_only_node(from.roots[i]);
@@ -253,7 +253,7 @@ public:
       bits = children[cur].bits;
       v = extract(key, 32 - offset, K);
       offset += K;
-    } 
+    }
 
     Node c = children[cur];
     int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
@@ -466,16 +466,19 @@ int main() {
   std::chrono::microseconds dur;
   uint64_t repeat = 300*1000*1000;
 
+  std::cout << "Look up random " << repeat << " keys for each test. "
+            << "S=" << S << " K=" << K << "\n";
+
   dur = bench<Poptrie>(&sum, rand, repeat, false);
   dur = bench<Poptrie2>(&sum, rand, repeat, false);
 
-  dur = bench<Poptrie>(&sum, rand, repeat, true);
-  printf("OK %ld μs\n", (long)dur.count());
-  printf("OK %fMlps\n\n", (double)repeat / (double)dur.count());
+  std::cout << "Regular Poptrie:  ";
+  dur = bench<Poptrie>(&sum, rand, repeat, false);
+  printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
-  dur = bench<Poptrie2>(&sum, rand, repeat, true);
-  printf("OK %ld μs\n", (long)dur.count());
-  printf("OK %fMlps\n", (double)repeat / (double)dur.count());
+  std::cout << "Modified Poptrie: ";
+  dur = bench<Poptrie2>(&sum, rand, repeat, false);
+  printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
   return 0;
 #else
   test();
