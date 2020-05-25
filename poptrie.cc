@@ -28,18 +28,22 @@ class Poptrie2;
 constexpr int K = 6;
 constexpr int S = 18;
 
-__attribute__((always_inline))
 static inline uint32_t extract(uint32_t bits, int start, int len) {
   return (bits >> (start - len)) & ((1L<<len) - 1);
 }
 
-__attribute__((always_inline))
 static inline int popcnt(uint64_t x, int len) {
   return __builtin_popcountl(x & ((1UL << len) - 1));
 }
 
 class Trie {
 public:
+  struct Node {
+    std::vector<Node> children;
+    uint32_t val = 0;
+    bool is_leaf = true;
+  };
+
   Trie() {
     roots.resize(1<<S);
   }
@@ -85,16 +89,6 @@ public:
     }
     return cur->val;
   }
-
-private:
-  friend Poptrie;
-  friend Poptrie2;
-
-  struct Node {
-    std::vector<Node> children;
-    uint32_t val = 0;
-    bool is_leaf = true;
-  };
 
   void expand(Node *cur) {
     if (!cur->is_leaf)
@@ -422,11 +416,6 @@ static bool in_range(Range &range, uint32_t addr) {
 
 __attribute__((unused))
 static void test() {
-  std::stable_sort(ranges.begin(), ranges.end(),
-                   [](const Range &a, const Range &b) {
-                     return a.masklen < b.masklen;
-                   });
-
   Trie trie;
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
@@ -465,11 +454,6 @@ private:
 template <class T>
 __attribute__((unused))
 static std::chrono::microseconds bench(uint32_t *x, Xorshift rand, uint64_t repeat) {
-  std::stable_sort(ranges.begin(), ranges.end(),
-                   [](const Range &a, const Range &b) {
-                     return a.masklen < b.masklen;
-                   });
-
   Trie trie;
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
@@ -487,6 +471,11 @@ static std::chrono::microseconds bench(uint32_t *x, Xorshift rand, uint64_t repe
 }
 
 int main() {
+  std::stable_sort(ranges.begin(), ranges.end(),
+                   [](const Range &a, const Range &b) {
+                     return a.masklen < b.masklen;
+                   });
+
 #if 1
   static std::uniform_int_distribution<uint32_t> dist1(0, 1L<<31);
   Xorshift rand(dist1(rand_engine));
