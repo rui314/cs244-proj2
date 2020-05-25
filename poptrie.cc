@@ -10,6 +10,13 @@
 #include <cstdlib>
 #include <utility>
 
+struct Test {
+  uint32_t ip;
+  int masklen;
+};
+
+extern Test testset[];
+
 using std::chrono::high_resolution_clock;
 
 std::default_random_engine rand_engine;
@@ -18,7 +25,7 @@ class Trie;
 class Poptrie;
 
 constexpr int K = 6;
-constexpr int S = 18;
+constexpr int S = 20;
 
 static constexpr int power_of_two(int n) {
   int x = 1;
@@ -280,6 +287,7 @@ static bool in_range(Range &range, uint32_t addr) {
          addr < range.addr + (1L << (32 - range.masklen));
 }
 
+__attribute__((unused))
 static Range create_random_range() {
   static std::uniform_int_distribution<uint32_t> dist1(0, UINT32_MAX);
   static std::uniform_int_distribution<uint32_t> dist2(8, 30);
@@ -295,8 +303,8 @@ static Range create_random_range() {
 __attribute__((unused))
 static void test2() {
   std::vector<Range> ranges;
-  for (int i = 0; i < 110; i++)
-    ranges.push_back(create_random_range());
+  for (uint32_t i = 0; testset[i].ip && testset[i].masklen; i++)
+    ranges.push_back({testset[i].ip, testset[i].masklen, i});
 
   std::stable_sort(ranges.begin(), ranges.end(),
                    [](const Range &a, const Range &b) {
@@ -308,7 +316,7 @@ static void test2() {
     trie.insert(range.addr, range.masklen, range.val);
 
   Poptrie ptrie(trie);
-  ptrie.dump();
+  // ptrie.dump();
 
   auto find = [&](uint32_t addr) -> uint32_t {
                 for (int i = ranges.size() - 1; i >= 0; i--)
@@ -357,7 +365,7 @@ static std::chrono::microseconds bench(uint32_t *x, std::vector<uint32_t> &rando
 }
 
 int main() {
-#if 1
+#if 0
   static std::uniform_int_distribution<uint32_t> dist1(0, 1<<30);
   std::vector<uint32_t> random;
   for (int i = 0; i < 10*1000*1000; i++)
