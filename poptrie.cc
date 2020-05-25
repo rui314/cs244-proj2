@@ -564,19 +564,6 @@ static bool in_range(Range &range, uint32_t addr) {
 }
 
 __attribute__((unused))
-static Range create_random_range() {
-  static std::uniform_int_distribution<uint32_t> dist1(0, UINT32_MAX);
-  static std::uniform_int_distribution<uint32_t> dist2(8, 30);
-  static std::uniform_int_distribution<uint32_t> dist3(0, 1<<30);
-
-  uint32_t addr = dist1(rand_engine);
-  int masklen = dist2(rand_engine);
-  uint32_t val = dist3(rand_engine);
-  addr = addr & ~((1L << (32 - masklen)) - 1);
-  return {addr, masklen, val};
-}
-
-__attribute__((unused))
 static void test2() {
   std::vector<Range> ranges;
   for (uint32_t i = 0; testset[i].ip && testset[i].masklen; i++)
