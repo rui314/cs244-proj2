@@ -228,18 +228,23 @@ private:
 };
 
 class OptimizedPoptrie {
+  enum {
+        DIRECT = 1,
+        LEAF_ONLY = 2,
+  };
+
 public:
   OptimizedPoptrie(Trie &from) {
     direct_indices.resize(1<<S);
 
     for (int i = 0; i < (1<<S); i++) {
       if (from.roots[i].is_leaf) {
-        direct_indices[i] = from.roots[i].val | 0x40000000;
+        direct_indices[i] = from.roots[i].val | (DIRECT << 30);
         continue;
       }
       
       if (is_leaf_only(from.roots[i])) {
-        direct_indices[i] = leaf_only_node.size() | 0x80000000;
+        direct_indices[i] = leaf_only_node.size() | (LEAF_ONLY << 30);
         import_leaf_only_node(from.roots[i]);
         continue;
       }
@@ -253,10 +258,10 @@ public:
 
   uint32_t lookup(uint32_t key) {
     uint32_t didx = direct_indices[extract(key, 32, S)];
-    if ((didx >> 30) == 1)
+    if ((didx >> 30) == DIRECT)
       return didx & 0x3fffffff;
 
-    if ((didx >> 30) == 2) {
+    if ((didx >> 30) == LEAF_ONLY) {
       uint32_t idx = didx & 0x3fffffff;
       uint64_t leafbits = *(uint64_t *)&leaf_only_node[idx];
       uint64_t v = extract(key, 32 - S, K);
@@ -278,13 +283,6 @@ public:
 
     Node c = children[cur];
     int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
-    /*
-    std::cout << "=== leaf: v=" << v
-              << " c.base0=" << c.base0
-              << " popcnt=" << count
-              << " leaves[c.base0 + popcnt(c.leafbits, v + 1) - 1]=" << leaves[c.base0 + count - 1]
-              << "\n";
-    */
     return leaves[c.base0 + count - 1];
  }
 
@@ -699,7 +697,7 @@ static std::chrono::microseconds bench2(uint32_t *x, std::vector<uint32_t> &rand
 }
 
 int main() {
-#if 0
+#if 1
   static std::uniform_int_distribution<uint32_t> dist1(0, 1<<30);
   std::vector<uint32_t> random;
   for (int i = 0; i < 10*1000*1000; i++)
