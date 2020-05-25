@@ -471,36 +471,6 @@ static void test() {
   }
 }
 
-__attribute__((unused))
-static void test3() {
-  std::vector<Range> ranges;
-  for (uint32_t i = 0; testset[i].ip && testset[i].masklen; i++)
-    ranges.push_back({testset[i].ip, testset[i].masklen, i});
-
-  std::stable_sort(ranges.begin(), ranges.end(),
-                   [](const Range &a, const Range &b) {
-                     return a.masklen < b.masklen;
-                   });
-
-  Mytrie trie;
-  for (Range &range : ranges)
-    trie.insert(range.addr, range.masklen, range.val);
-  trie.finalize();
-
-  auto find = [&](uint32_t addr) -> uint32_t {
-                for (int i = ranges.size() - 1; i >= 0; i--)
-                  if (in_range(ranges[i], addr))
-                    return ranges[i].val;
-                return 0;
-              };
-
-  for (Range &range : ranges) {
-    uint32_t end = range.addr + (1L << (32 - range.masklen)) - 1;
-    ASSERT(find(range.addr), trie.lookup(range.addr));
-    ASSERT(find(end), trie.lookup(end));
-  }
-}
-
 class Xorshift {
 public:
   Xorshift(uint32_t seed) : state(seed) {}
