@@ -23,9 +23,10 @@ std::default_random_engine rand_engine;
 
 class Trie;
 class Poptrie;
+class OptimizedPoptrie;
 
 constexpr int K = 6;
-constexpr int S = 20;
+constexpr int S = 16;
 
 static constexpr int power_of_two(int n) {
   int x = 1;
@@ -51,6 +52,8 @@ public:
   }
 
   void insert(uint32_t key, int key_len, uint32_t val) {
+    assert(val < (1 << 30));
+
     if (key_len <= S) {
       for (int i = 0; i < (1L << (S - key_len)); i++) {
         Node &node = roots[(key >> (32 - S)) + i];
@@ -97,6 +100,7 @@ public:
 
 private:
   friend Poptrie;
+  friend OptimizedPoptrie;
 
   struct Node {
     std::vector<Node> children;
@@ -177,6 +181,23 @@ public:
     std::cout << "inodes=" << children.size()
               << "\nleaves=" << leaves.size()
               << "\n";
+
+    int count[64] = {0};
+    for (uint32_t idx : direct_indices)
+      if ((idx & 0x80000000) == 0)
+        count[__builtin_popcountl(children[idx].bits)]++;
+    std::cout << "count:";
+    for (int i = 0; i < 64; i++)
+      std::cout << " " << count[i];
+    std::cout << "\n";
+
+    int count2[64] = {0};
+    for (Node &node : children)
+      count2[__builtin_popcountl(node.bits)]++;
+    std::cout << "count2:";
+    for (int i = 0; i < 64; i++)
+      std::cout << " " << count2[i];
+    std::cout << "\n";
   }
 
   void dump() {
@@ -234,6 +255,175 @@ private:
   std::vector<Node> children;
   std::vector<uint32_t> leaves;
   std::vector<uint32_t> direct_indices;
+};
+
+class OptimizedPoptrie {
+public:
+  OptimizedPoptrie(Trie &from) {
+    direct_indices.resize(1<<S);
+
+    for (int i = 0; i < (1<<S); i++) {
+      if (from.roots[i].is_leaf) {
+        direct_indices[i] = from.roots[i].val | 0x40000000;
+        continue;
+      }
+      
+      bool leaf_only = true;
+      for (Trie::Node &node : from.roots[i].children) {
+        if (!node.is_leaf) {
+          leaf_only = false;
+          break;
+        }
+      }
+
+      if (leaf_only) {
+        if (leaf_only_node.size() % 2)
+          leaf_only_node.push_back(0);
+        int idx = leaf_only_node.size();
+        leaf_only_node.push_back(0);
+        leaf_only_node.push_back(0);
+
+        uint64_t leafbits = 1;
+        uint32_t last = from.roots[i].children[0].val;
+        leaf_only_node.push_back(last);
+
+        for (size_t j = 1; j < from.roots[i].children.size(); j++) {
+          uint32_t val = from.roots[i].children[j].val;
+          if (val != last) {
+            leafbits |= 1L<<j;
+            leaf_only_node.push_back(val);
+            last = val;
+          }
+        }
+        *(uint64_t *)&leaf_only_node[idx] = leafbits;
+
+        direct_indices[i] = idx | 0x80000000;
+        continue;
+      }
+
+      int idx = children.size();
+      direct_indices[i] = idx;
+      children.push_back({});
+      import(from.roots[i], idx);
+    }
+  }
+
+  uint32_t lookup(uint32_t key) {
+    uint32_t didx = direct_indices[extract(key, 32, S)];
+    if ((didx >> 30) == 1)
+      return didx & 0x3fffffff;
+
+    if ((didx >> 30) == 2) {
+      uint32_t idx = didx & 0x3fffffff;
+      uint64_t leafbits = *(uint64_t *)&leaf_only_node[idx];
+      uint64_t v = extract(key, 32 - S, K);
+      int count = __builtin_popcountl(leafbits & ((2UL << v) - 1));
+      return leaf_only_node[idx + count + 1];
+    }
+
+    uint32_t cur = didx;
+    uint64_t bits = children[cur].bits;
+    uint32_t v = extract(key, 32 - S, K);
+    uint32_t offset = S + K;
+
+    while (bits & (1UL << v)) {
+      cur = children[cur].base1 + popcnt(bits, v);
+      bits = children[cur].bits;
+      v = extract(key, 32 - offset, K);
+      offset += K;
+    } 
+
+    Node c = children[cur];
+    int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
+    /*
+    std::cout << "=== leaf: v=" << v
+              << " c.base0=" << c.base0
+              << " popcnt=" << count
+              << " leaves[c.base0 + popcnt(c.leafbits, v + 1) - 1]=" << leaves[c.base0 + count - 1]
+              << "\n";
+    */
+    return leaves[c.base0 + count - 1];
+ }
+
+  void info() {
+    std::cout << "inodes=" << children.size()
+              << "\nleaves=" << leaves.size()
+              << "\n";
+
+    int count[64] = {0};
+    for (uint32_t idx : direct_indices)
+      if ((idx >> 30) == 0)
+        count[__builtin_popcountl(children[idx].bits)]++;
+    std::cout << "count:";
+    for (int i = 0; i < 64; i++)
+      std::cout << " " << count[i];
+    std::cout << "\n";
+
+    int count2[64] = {0};
+    for (Node &node : children)
+      count2[__builtin_popcountl(node.bits)]++;
+    std::cout << "count2:";
+    for (int i = 0; i < 64; i++)
+      std::cout << " " << count2[i];
+    std::cout << "\n";
+  }
+
+  void dump() {
+    std::cout << "Children:\n";
+    for (Node &node : children)
+      std::cout << " bits=" << std::bitset<64>(node.bits)
+                << " leafbits=" << std::bitset<64>(node.leafbits)
+                << " base0=" << node.base0 << " base1=" << node.base1 << "\n";
+    std::cout << "Leaves:";
+    for (uint32_t x : leaves)
+      std::cout << " " << x;
+    std::cout << "\n";
+  }
+
+private:
+  struct Node {
+    uint64_t bits = 0;
+    uint64_t leafbits = 0;
+    uint32_t base0 = 0;
+    uint32_t base1 = 0;
+  };
+
+  void import(Trie::Node &from, int idx) {
+    assert(from.children.size() == (1<<K));
+    int start = children.size();
+
+    for (Trie::Node &node : from.children)
+      if (!node.is_leaf)
+        children.push_back({});
+
+    Node &to = children[idx];
+    to.base0 = leaves.size();
+    to.base1 = start;
+
+    for (size_t i = 0; i < from.children.size(); i++)
+      if (!from.children[i].is_leaf)
+        to.bits |= 1L<<i;
+
+    for (size_t i = 0; i < from.children.size(); i++) {
+      if (from.children[i].is_leaf) {
+        if (leaves.size() == to.base0 ||
+            leaves.back() != from.children[i].val) {
+          to.leafbits |= 1L<<i;
+          leaves.push_back(from.children[i].val);
+        }
+      }
+    }
+
+    size_t i = 0;
+    for (size_t j = 0; j < from.children.size(); j++)
+      if (!from.children[j].is_leaf)
+        import(from.children[j], start + i++);
+  }
+
+  std::vector<Node> children;
+  std::vector<uint32_t> leaves;
+  std::vector<uint32_t> direct_indices;
+  std::vector<uint32_t> leaf_only_node;
 };
 
 class Mytrie {
@@ -295,7 +485,7 @@ public:
       if (!dup[i])
         idx++;
     }
-    std::cout << "idx=" << (idx * 64 * 4) << "\n";
+    std::cout << "idx=" << idx << "\n";
 
     for (int i = 0; i < (1L << len1); i++) {
       Node &node = nodes[i];
@@ -439,7 +629,7 @@ static void test2() {
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
 
-  Poptrie ptrie(trie);
+  OptimizedPoptrie ptrie(trie);
   // ptrie.dump();
 
   auto find = [&](uint32_t addr) -> uint32_t {
@@ -488,7 +678,7 @@ static void test3() {
   }
 }
 
-static constexpr int repeat = 10;
+static constexpr int repeat = 30;
 
 __attribute__((unused))
 static std::chrono::microseconds bench(uint32_t *x, std::vector<uint32_t> &random) {
@@ -505,7 +695,7 @@ static std::chrono::microseconds bench(uint32_t *x, std::vector<uint32_t> &rando
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
 
-  Poptrie ptrie(trie);
+  OptimizedPoptrie ptrie(trie);
   ptrie.info();
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
@@ -553,12 +743,12 @@ int main() {
     random.push_back(dist1(rand_engine));
 
   uint32_t sum = 0;
-  std::chrono::microseconds dur = bench2(&sum, random);
+  std::chrono::microseconds dur = bench(&sum, random);
   printf("OK %ld μs\n", dur.count());
   printf("OK %fMlps\n", (double)(random.size() * repeat) / ((double)dur.count() / 1000 / 1000) / 1000 / 1000);
   return sum;
 #else
-  test3();
+  test2();
   std::cout << "OK\n";
   return 0;
 #endif
