@@ -656,7 +656,7 @@ private:
 
 template <class T>
 __attribute__((unused))
-static std::chrono::microseconds bench(uint32_t *x, Xorshift &rand, uint64_t repeat) {
+static std::chrono::microseconds bench(uint32_t *x, Xorshift rand, uint64_t repeat) {
   std::vector<Range> ranges;
   for (uint32_t i = 0; testset[i].ip && testset[i].masklen; i++)
     ranges.push_back({testset[i].ip, testset[i].masklen, i});
