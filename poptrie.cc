@@ -262,17 +262,9 @@ public:
     if (node.is_direct)
       expand(node);
 
-    if (key_len <= len1 + len2) {
-      for (int i = 0; i < (1L << (len1 + len2 - key_len)); i++)
-        for (int j = 0; j < (1L << len3); j++)
-          leaves[node.base + i * (1L << len3) + j] = val;
-      return;
-    }
-
-    int mid = extract(key, len1, len2);
-    int last = extract(key, len1 + len2, len3);
+    int idx = key & ((1L << (len2 + len3)) - 1);
     for (int i = 0; i < (1L << (32 - key_len)); i++)
-      leaves[node.base + mid * (1L << len3) + last + i] = val;
+      leaves[node.base + idx + i] = val;
   }
 
   uint32_t lookup(uint32_t key) {
@@ -280,9 +272,13 @@ public:
     if (node.is_direct)
       return node.base;
 
+    int idx = key & ((1L << (len2 + len3)) - 1);
+    return leaves[node.base + idx];
+
     int mid = extract(key, len1, len2);
-    int count = __builtin_popcountl(node.bits & ((2L << mid) - 1));
-    int idx1 = (count - 1) * (1L << len3);
+    // int count = __builtin_popcountl(node.bits & ((2L << mid) - 1));
+    // int idx1 = (count - 1) * (1L << len3);
+    int idx1 = mid * (1L << len3);
     int idx2 = key & ((1L << len3) - 1);
     return leaves[node.base + idx1 + idx2];
  }
@@ -321,8 +317,8 @@ void assert_(uint32_t expected, uint32_t actual, const std::string &code) {
   assert_(expected, actual, #actual)
 
 __attribute__((unused))
-static void test() {
-  Trie trie;
+static void test1() {
+  Mytrie trie;
   trie.insert(0, 1, 3);
   trie.insert(0x80000000, 1, 5);
   trie.insert(0x80010000, 16, 8);
@@ -337,6 +333,7 @@ static void test() {
   ASSERT(8, trie.lookup(0x8001ffff));
   ASSERT(5, trie.lookup(0x80020000));
 
+  /*
   Poptrie ptrie(trie);
   ptrie.dump();
   ASSERT(3, ptrie.lookup(0b11));
@@ -346,6 +343,7 @@ static void test() {
   ASSERT(8, ptrie.lookup(0x80010000));
   ASSERT(8, ptrie.lookup(0x8001ffff));
   ASSERT(5, ptrie.lookup(0x80020000));
+  */
 }
 
 struct Range {
