@@ -325,9 +325,9 @@ public:
       return node.base;
 
     int mid = extract(key, 32 - len1, len2);
-    //    int count = __builtin_popcountl(node.bits & ((2L << mid) - 1));
-    //    int idx1 = (count - 1) * (1L << len3);
-    int idx1 = mid * (1L << len3);
+    int count = __builtin_popcountl(node.bits & ((2L << mid) - 1));
+    int idx1 = (count - 1) * (1L << len3);
+    // int idx1 = mid * (1L << len3);
     int idx2 = key & ((1L << len3) - 1);
     return leaves[node.base + idx1 + idx2];
  }
@@ -467,6 +467,7 @@ static void test3() {
   Mytrie trie;
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
+  trie.finalize();
 
   auto find = [&](uint32_t addr) -> uint32_t {
                 for (int i = ranges.size() - 1; i >= 0; i--)
