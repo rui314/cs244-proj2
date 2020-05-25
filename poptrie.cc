@@ -453,13 +453,14 @@ private:
 
 template <class T>
 __attribute__((unused))
-static std::chrono::microseconds bench(volatile uint32_t *x, Xorshift rand, uint64_t repeat) {
+static std::chrono::microseconds bench(volatile uint32_t *x, Xorshift rand, uint64_t repeat, bool show_info) {
   Trie trie;
   for (Range &range : ranges)
     trie.insert(range.addr, range.masklen, range.val);
 
   T ptrie(trie);
-  ptrie.info();
+  if (show_info)
+    ptrie.info();
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
   uint32_t sum = 0;
@@ -484,15 +485,14 @@ int main() {
   std::chrono::microseconds dur;
   uint64_t repeat = 300*1000*1000;
 
-  dur = bench<Poptrie>(&sum, rand, repeat);
-  dur = bench<Poptrie2>(&sum, rand, repeat);
-  std::cout << "\n";
+  dur = bench<Poptrie>(&sum, rand, repeat, false);
+  dur = bench<Poptrie2>(&sum, rand, repeat, false);
 
-  dur = bench<Poptrie>(&sum, rand, repeat);
+  dur = bench<Poptrie>(&sum, rand, repeat, true);
   printf("OK %ld μs\n", dur.count());
   printf("OK %fMlps\n\n", (double)repeat / (double)dur.count());
 
-  dur = bench<Poptrie2>(&sum, rand, repeat);
+  dur = bench<Poptrie2>(&sum, rand, repeat, true);
   printf("OK %ld μs\n", dur.count());
   printf("OK %fMlps\n", (double)repeat / (double)dur.count());
   return 0;
