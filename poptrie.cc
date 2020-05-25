@@ -153,13 +153,6 @@ public:
 
     Node c = children[cur];
     int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
-    /*
-    std::cout << "=== leaf: v=" << v
-              << " c.base0=" << c.base0
-              << " popcnt=" << count
-              << " leaves[c.base0 + popcnt(c.leafbits, v + 1) - 1]=" << leaves[c.base0 + count - 1]
-              << "\n";
-    */
     return leaves[c.base0 + count - 1];
  }
 
