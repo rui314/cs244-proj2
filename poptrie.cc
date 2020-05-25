@@ -564,7 +564,7 @@ static bool in_range(Range &range, uint32_t addr) {
 }
 
 __attribute__((unused))
-static void test2() {
+static void test() {
   std::vector<Range> ranges;
   for (uint32_t i = 0; testset[i].ip && testset[i].masklen; i++)
     ranges.push_back({testset[i].ip, testset[i].masklen, i});
@@ -691,7 +691,7 @@ int main() {
 
   return sum;
 #else
-  test2();
+  test();
   std::cout << "OK\n";
   return 0;
 #endif
