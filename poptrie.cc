@@ -155,7 +155,7 @@ public:
     for (uint32_t idx : direct_indices)
       if ((idx & 0x80000000) == 0)
         count[__builtin_popcountl(children[idx].bits)]++;
-    std::cout << "count:";
+    std::cout << "dist:";
     for (int i = 0; i < 64; i++)
       std::cout << " " << count[i];
     std::cout << "\n";
@@ -273,7 +273,7 @@ public:
     for (uint32_t idx : direct_indices)
       if ((idx >> 30) == 0)
         count[__builtin_popcountl(children[idx].bits)]++;
-    std::cout << "count:";
+    std::cout << "dist:";
     for (int i = 0; i < 64; i++)
       std::cout << " " << count[i];
     std::cout << "\n";
