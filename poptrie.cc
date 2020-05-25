@@ -269,27 +269,8 @@ public:
       }
       
       if (is_leaf_only(from.roots[i])) {
-        if (leaf_only_node.size() % 2)
-          leaf_only_node.push_back(0);
-        int idx = leaf_only_node.size();
-        leaf_only_node.push_back(0);
-        leaf_only_node.push_back(0);
-
-        uint64_t leafbits = 1;
-        uint32_t last = from.roots[i].children[0].val;
-        leaf_only_node.push_back(last);
-
-        for (size_t j = 1; j < from.roots[i].children.size(); j++) {
-          uint32_t val = from.roots[i].children[j].val;
-          if (val != last) {
-            leafbits |= 1L<<j;
-            leaf_only_node.push_back(val);
-            last = val;
-          }
-        }
-        *(uint64_t *)&leaf_only_node[idx] = leafbits;
-
-        direct_indices[i] = idx | 0x80000000;
+        direct_indices[i] = leaf_only_node.size() | 0x80000000;
+        import_leaf_only_node(from.roots[i]);
         continue;
       }
 
@@ -385,6 +366,30 @@ private:
       if (!node.is_leaf)
         return false;
     return true;
+  }
+
+  void import_leaf_only_node(Trie::Node &node) {
+    int start = leaf_only_node.size();
+    leaf_only_node.push_back(0);
+    leaf_only_node.push_back(0);
+
+    uint64_t leafbits = 1;
+    uint32_t last = node.children[0].val;
+    leaf_only_node.push_back(last);
+
+    for (size_t i = 1; i < node.children.size(); i++) {
+      uint32_t val = node.children[i].val;
+      if (val != last) {
+        leafbits |= 1L<<i;
+        leaf_only_node.push_back(val);
+        last = val;
+      }
+    }
+
+    if (leaf_only_node.size() % 2)
+      leaf_only_node.push_back(0);
+
+    *(uint64_t *)&leaf_only_node[start] = leafbits;
   }
 
   void import(Trie::Node &from, int idx) {
