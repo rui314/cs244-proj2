@@ -121,6 +121,7 @@ public:
     }
   }
 
+  __attribute__((noinline))
   uint32_t lookup(uint32_t key) {
     int didx = direct_indices[key >> (32 - S)];
     if (didx & 0x80000000)
@@ -230,6 +231,7 @@ public:
     }
   }
 
+  __attribute__((noinline))
   uint32_t lookup(uint32_t key) {
     uint32_t didx = direct_indices[key >> (32 - S)];
     if (didx & 0x80000000)
