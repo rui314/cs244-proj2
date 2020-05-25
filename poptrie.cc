@@ -236,6 +236,78 @@ private:
   std::vector<uint32_t> direct_indices;
 };
 
+class Mytrie {
+public:
+  enum {
+        len1 = 20,
+        len2 = 6,
+        len3 = 6,
+  };
+
+  Mytrie() {
+    nodes.resize(1<<len1);
+  }
+
+  void insert(uint32_t key, int key_len, uint32_t val) {
+    if (key_len <= len1) { 
+      for (int i = 0; i < (1L << (len1 - key_len)); i++) {
+        Node &node = nodes[extract(key, 32, len1) + i];
+        assert(node.is_direct);
+        node.base = val;
+      }
+      return;
+    }
+
+    Node &node = nodes[extract(key, 32, len1)];
+    if (node.is_direct)
+      expand(node);
+
+    if (key_len <= len1 + len2) {
+      for (int i = 0; i < (1L << (len1 + len2 - key_len)); i++)
+        for (int j = 0; j < (1L << len3); j++)
+          leaves[node.base + i * (1L << len3) + j] = val;
+      return;
+    }
+
+    int mid = extract(key, len1, len2);
+    int last = extract(key, len1 + len2, len3);
+    for (int i = 0; i < (1L << (32 - key_len)); i++)
+      leaves[node.base + mid * (1L << len3) + last + i] = val;
+  }
+
+  uint32_t lookup(uint32_t key) {
+    Node &node = nodes[extract(key, 32, len1)];
+    if (node.is_direct)
+      return node.base;
+
+    int mid = extract(key, len1, len2);
+    int count = __builtin_popcountl(node.bits & ((2L << mid) - 1));
+    int idx1 = (count - 1) * (1L << len3);
+    int idx2 = key & ((1L << len3) - 1);
+    return leaves[node.base + idx1 + idx2];
+ }
+
+private:
+  struct Node {
+    uint64_t bits = 0;
+    bool is_direct = true;
+    uint32_t base = 0;
+  };
+
+  void expand(Node &node) {
+    assert(node.is_direct);
+    node.is_direct = false;
+
+    int val = node.base;
+    node.base = leaves.size();
+    for (int i = 0; i < (1L << (len2 + len3)); i++)
+      leaves.push_back(val);
+  }
+
+  std::vector<Node> nodes;
+  std::vector<uint32_t> leaves;
+};
+
 void assert_(uint32_t expected, uint32_t actual, const std::string &code) {
   if (expected == actual) {
     std::cout << code << " => " << expected << "\n";
@@ -334,6 +406,35 @@ static void test2() {
   }
 }
 
+__attribute__((unused))
+static void test3() {
+  std::vector<Range> ranges;
+  for (uint32_t i = 0; testset[i].ip && testset[i].masklen; i++)
+    ranges.push_back({testset[i].ip, testset[i].masklen, i});
+
+  std::stable_sort(ranges.begin(), ranges.end(),
+                   [](const Range &a, const Range &b) {
+                     return a.masklen < b.masklen;
+                   });
+
+  Mytrie trie;
+  for (Range &range : ranges)
+    trie.insert(range.addr, range.masklen, range.val);
+
+  auto find = [&](uint32_t addr) -> uint32_t {
+                for (int i = ranges.size() - 1; i >= 0; i--)
+                  if (in_range(ranges[i], addr))
+                    return ranges[i].val;
+                return 0;
+              };
+
+  for (Range &range : ranges) {
+    uint32_t end = range.addr + (1L << (32 - range.masklen)) - 1;
+    ASSERT(find(range.addr), trie.lookup(range.addr));
+    ASSERT(find(end), trie.lookup(end));
+  }
+}
+
 static constexpr int repeat = 10;
 
 __attribute__((unused))
@@ -365,7 +466,7 @@ static std::chrono::microseconds bench(uint32_t *x, std::vector<uint32_t> &rando
 }
 
 int main() {
-#if 1
+#if 0
   static std::uniform_int_distribution<uint32_t> dist1(0, 1<<30);
   std::vector<uint32_t> random;
   for (int i = 0; i < 10*1000*1000; i++)
@@ -377,7 +478,7 @@ int main() {
   printf("OK %fMlps\n", (double)(random.size() * repeat) / ((double)dur.count() / 1000 / 1000) / 1000 / 1000);
   return sum;
 #else
-  test2();
+  test3();
   std::cout << "OK\n";
   return 0;
 #endif
