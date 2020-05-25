@@ -10,12 +10,13 @@
 #include <cstdlib>
 #include <utility>
 
-struct Test {
-  uint32_t ip;
+struct Range {
+  uint32_t addr;
   int masklen;
+  uint32_t val;
 };
 
-extern Test testset[];
+extern std::vector<Range> ranges;
 
 using std::chrono::high_resolution_clock;
 
@@ -415,12 +416,6 @@ static void test1() {
   ASSERT(5, ptrie.lookup(0x80020000));
 }
 
-struct Range {
-  uint32_t addr;
-  int masklen;
-  uint32_t val;
-};
-
 static bool in_range(Range &range, uint32_t addr) {
   return range.addr <= addr &&
          addr < range.addr + (1L << (32 - range.masklen));
@@ -428,10 +423,6 @@ static bool in_range(Range &range, uint32_t addr) {
 
 __attribute__((unused))
 static void test() {
-  std::vector<Range> ranges;
-  for (uint32_t i = 0; testset[i].ip && testset[i].masklen; i++)
-    ranges.push_back({testset[i].ip, testset[i].masklen, i});
-
   std::stable_sort(ranges.begin(), ranges.end(),
                    [](const Range &a, const Range &b) {
                      return a.masklen < b.masklen;
@@ -444,16 +435,14 @@ static void test() {
   Poptrie ptrie(trie);
 
   auto find = [&](uint32_t addr) -> uint32_t {
-                for (int i = ranges.size() - 1; i >= 0; i--)
-                  if (in_range(ranges[i], addr))
-                    return ranges[i].val;
+                for (int i = range.size() - 1; i >= 0; i--)
+                  if (in_range(range[i], addr))
+                    return range[i].val;
                 return 0;
               };
 
   for (Range &range : ranges) {
     uint32_t end = range.addr + (1L << (32 - range.masklen)) - 1;
-    // std::cout << "range.addr =" << std::bitset<32>(range.addr) << "/" << range.masklen << "\n";
-    // std::cout << "range.addr2=" << std::bitset<32>(end) << "/" << range.masklen << "\n";
     ASSERT(find(range.addr), ptrie.lookup(range.addr));
     ASSERT(find(end), ptrie.lookup(end));
   }
@@ -477,10 +466,6 @@ private:
 template <class T>
 __attribute__((unused))
 static std::chrono::microseconds bench(uint32_t *x, Xorshift rand, uint64_t repeat) {
-  std::vector<Range> ranges;
-  for (uint32_t i = 0; testset[i].ip && testset[i].masklen; i++)
-    ranges.push_back({testset[i].ip, testset[i].masklen, i});
-
   std::stable_sort(ranges.begin(), ranges.end(),
                    [](const Range &a, const Range &b) {
                      return a.masklen < b.masklen;
