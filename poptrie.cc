@@ -267,6 +267,58 @@ public:
       leaves[node.base + idx + i] = val;
   }
 
+  void finalize() {
+    std::vector<bool> dup;
+    dup.resize(leaves.size() >> len3);
+
+    for (int i = 0; i < (1L << len1); i++) {
+      Node &node = nodes[i];
+      if (node.is_direct)
+        continue;
+
+      int cur = 0;
+      int sz = 1L << len3;
+      for (int j = 1; j < (1L << len2); j++) {
+        if (memcmp(&leaves[node.base + cur * sz], &leaves[node.base + j * sz], sz * sizeof(leaves[0])) == 0) {
+          dup[node.base + j] = true;
+        } else {
+          cur = j;
+        }
+      }
+    }
+
+    std::vector<uint32_t> newidx;
+    newidx.resize(leaves.size() >> len3);
+    int idx = 0;
+    for (size_t i = 0; i < dup.size(); i++) {
+      newidx[i] = idx;
+      if (!dup[i])
+        idx++;
+    }
+
+    for (int i = 0; i < (1L << len1); i++) {
+      Node &node = nodes[i];
+      if (node.is_direct)
+        continue;
+
+      for (int j = 0; j < (1L << len2); j++)
+        if (!dup[node.base + j])
+          node.bits = node.bits | (1L << j);
+      node.base = newidx[node.base];
+    }
+
+    std::vector<uint32_t> new_leaves;
+    for (size_t i = 0; i < dup.size(); i++) {
+      if (dup[i])
+        continue;
+
+      for (int j = 0; j < (1L << len3); j++)
+        new_leaves.push_back(leaves[i * (1L << len3) + j]);
+    }
+
+    leaves = new_leaves;
+  }
+
   uint32_t lookup(uint32_t key) {
     Node &node = nodes[extract(key, 32, len1)];
     if (node.is_direct)
@@ -489,7 +541,7 @@ static std::chrono::microseconds bench2(uint32_t *x, std::vector<uint32_t> &rand
 }
 
 int main() {
-#if 1
+#if 0
   static std::uniform_int_distribution<uint32_t> dist1(0, 1<<30);
   std::vector<uint32_t> random;
   for (int i = 0; i < 10*1000*1000; i++)
