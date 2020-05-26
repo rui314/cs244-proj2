@@ -489,7 +489,7 @@ int main() {
   dur = bench<Poptrie>(rand, repeat, false);
   dur = bench<Poptrie2>(rand, repeat, false);
 
-  std::cout << "Regular Poptrie:  ";
+  std::cout << "Original Poptrie: ";
   dur = bench<Poptrie>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
