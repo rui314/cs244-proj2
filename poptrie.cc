@@ -368,6 +368,118 @@ private:
   std::vector<uint32_t> leaf_only_node;
 };
 
+// A yet another Poptrie variant.
+class Poptrie3 {
+public:
+  Poptrie3(Trie &from) {
+    direct_indices.resize(1<<S);
+
+    for (int i = 0; i < (1<<S); i++) {
+      if (from.roots[i].is_leaf) {
+        direct_indices[i] = from.roots[i].val | 0x80000000;
+        continue;
+      }
+
+      int idx = children.size();
+      direct_indices[i] = idx;
+      children.push_back({});
+      import(from.roots[i], idx);
+    }
+  }
+
+  __attribute__((noinline))
+  uint32_t lookup(uint32_t key) {
+    int didx = direct_indices[key >> (32 - S)];
+    if (didx & 0x80000000)
+      return didx & 0x7fffffff;
+
+    uint32_t cur = didx;
+    uint64_t bits = children[cur].bits;
+    uint32_t v = extract(key, 32 - S, K);
+    uint32_t offset = S + K;
+
+    while (bits & (1UL << v)) {
+      cur = children[cur].base1 + popcnt(bits, v);
+      bits = children[cur].bits;
+      v = extract(key, 32 - offset, K);
+      offset += K;
+    }
+
+    Node c = children[cur];
+    uint64_t leafbits = *(uint64_t *)&leaves[c.base0];
+    int count = __builtin_popcountl(leafbits & ((2UL << v) - 1));
+    return leaves[c.base0 + count + 1];
+ }
+
+  void info() {
+    std::cout << "inodes=" << children.size()
+              << " leaves=" << leaves.size()
+              << " size=" << (children.size() * sizeof(children[0]) +
+                              leaves.size() * sizeof(leaves[0]) +
+                              direct_indices.size() * sizeof(direct_indices[0]))
+              << "\n";
+
+    int count[64] = {0};
+    for (uint32_t idx : direct_indices)
+      if ((idx & 0x80000000) == 0)
+        count[__builtin_popcountl(children[idx].bits)]++;
+    std::cout << "dist:";
+    for (int i = 0; i < 64; i++)
+      std::cout << " " << count[i];
+    std::cout << "\n";
+  }
+
+private:
+  struct Node {
+    alignas(16) uint64_t bits = 0;
+    uint32_t base0 = 0;
+    uint32_t base1 = 0;
+  };
+
+  void import(Trie::Node &from, int idx) {
+    assert(from.children.size() == (1<<K));
+    int start = children.size();
+
+    for (Trie::Node &node : from.children)
+      if (!node.is_leaf)
+        children.push_back({});
+
+    Node &to = children[idx];
+    to.base0 = leaves.size();
+    to.base1 = start;
+
+    for (size_t i = 0; i < from.children.size(); i++)
+      if (!from.children[i].is_leaf)
+        to.bits |= 1L<<i;
+
+    leaves.push_back(0);
+    leaves.push_back(0);
+
+    uint64_t leafbits = 0;
+
+    for (size_t i = 1; i < from.children.size(); i++) {
+      if (from.children[i].is_leaf) {
+        if (leaves.size() == to.base0 + 2 ||
+            leaves.back() != from.children[i].val) {
+          leafbits |= 1L<<i;
+          leaves.push_back(from.children[i].val);
+        }
+      }
+    }
+
+    *(uint64_t *)&leaves[to.base0] = leafbits;
+
+    size_t i = 0;
+    for (size_t j = 0; j < from.children.size(); j++)
+      if (!from.children[j].is_leaf)
+        import(from.children[j], start + i++);
+  }
+
+  std::vector<Node> children;
+  std::vector<uint32_t> leaves;
+  std::vector<uint32_t> direct_indices;
+};
+
 void assert_(uint32_t expected, uint32_t actual, const std::string &code) {
   if (expected == actual) {
     std::cout << code << " => " << expected << "\n";
@@ -493,9 +605,14 @@ int main() {
   dur = bench<Poptrie>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
-  std::cout << "Modified Poptrie: ";
+  std::cout << "Modified Poptrie 2: ";
   dur = bench<Poptrie2>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
+
+  std::cout << "Modified Poptrie 3: ";
+  dur = bench<Poptrie3>(rand, repeat, false);
+  printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
+
   return 0;
 #else
   test();
