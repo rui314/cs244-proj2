@@ -212,6 +212,98 @@ private:
   std::vector<uint32_t> direct_indices;
 };
 
+class Poptrie8 {
+public:
+  Poptrie8(Trie &from) {
+    direct_indices.resize(1<<S);
+
+    for (int i = 0; i < (1<<S); i++) {
+      if (from.roots[i].is_leaf) {
+        direct_indices[i] = from.roots[i].val | 0x80000000;
+        continue;
+      }
+
+      int idx = data.size();
+      direct_indices[i] = idx;
+      data.resize(data.size() + sizeof(Node));
+      import(from.roots[i], idx);
+    }
+  }
+
+  __attribute__((noinline))
+  uint32_t lookup(uint32_t key) {
+    int didx = direct_indices[key >> (32 - S)];
+    if (didx & 0x80000000)
+      return didx & 0x7fffffff;
+
+    uint32_t cur = didx;
+    uint64_t bits = ((Node *)&data[cur])->bits;
+    uint32_t v = extract(key, 32 - S, K);
+    uint32_t offset = S + K;
+
+    while (bits & (1UL << v)) {
+      cur = ((Node *)&data[cur])->base1 + (popcnt(bits, v) * sizeof(Node));
+      bits = ((Node *)&data[cur])->bits;
+      v = extract(key, 32 - offset, K);
+      offset += K;
+    }
+
+    Node &c = *(Node *)&data[cur];
+    int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
+    return *(uint32_t *)&data[c.base0 + (count - 1) * 4];
+  }
+
+  void info() {}
+
+private:
+  struct Node {
+    uint64_t bits = 0;
+    uint64_t leafbits = 0;
+    uint32_t base0 = 0;
+    uint32_t base1 = 0;
+  };
+
+  void import(Trie::Node &from, int idx) {
+    int nleaves = 0;
+    for (Trie::Node &node : from.children)
+      if (node.is_leaf)
+        nleaves++;
+
+    Node node = {};
+    node.base1 = data.size();
+    data.resize(data.size() + ((64 - nleaves) * sizeof(Node)));
+    node.base0 = data.size();
+
+    uint32_t last = -1;
+
+    for (size_t i = 0; i < from.children.size(); i++) {
+      Trie::Node &child = from.children[i];
+      if (!child.is_leaf) {
+        node.bits |= 1L<<i;
+        continue;
+      }
+
+      if (child.val == last)
+        continue;
+
+      node.leafbits |= 1L<<i;
+      data.resize(data.size() + 4);
+      *(uint32_t *)&data[data.size() - 4] = child.val;
+      last = child.val;
+    }
+
+    *(Node *)&data[idx] = node;
+
+    size_t i = 0;
+    for (size_t j = 0; j < from.children.size(); j++)
+      if (!from.children[j].is_leaf)
+        import(from.children[j], node.base1 + i++ * sizeof(Node));
+  }
+
+  std::vector<uint8_t> data;
+  std::vector<uint32_t> direct_indices;
+};
+
 // A modified version of Poptrie.
 class Poptrie2 {
 public:
@@ -495,6 +587,10 @@ int main() {
 
   std::cout << "Modified Poptrie 2: ";
   dur = bench<Poptrie2>(rand, repeat, false);
+  printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
+
+  std::cout << "Modified Poptrie 8: ";
+  dur = bench<Poptrie8>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   return 0;
