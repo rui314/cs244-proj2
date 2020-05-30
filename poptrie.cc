@@ -147,7 +147,7 @@ public:
     Node c = children[cur];
     int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
     return leaves[c.base0 + count - 1];
- }
+  }
 
   void info() {
     std::cout << "inodes=" << children.size()
@@ -517,7 +517,7 @@ public:
     Node &c = *(Node *)&data[cur];
     int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
     return *(uint32_t *)&data[c.base0 + (count - 1) * 4];
- }
+  }
 
   void info() {
     std::cout << " size=" << (data.size() +
