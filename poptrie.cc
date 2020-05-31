@@ -649,29 +649,21 @@ public:
       return *(uint32_t *)&data[idx + count + 1];
     }
 
-    uint64_t bits = ((Node *)&data[idx])->bits;
-    uint32_t v = extract(key, 32 - S, K);
-    uint32_t offset = S + K;
+    uint32_t offset = S;
 
-    while (bits & (1UL << v)) {
-      idx = ((Node *)&data[idx])->base1 + popcnt(bits, v) * sizeof(Node);
-
-      if (idx & 0x80000000) {
-        idx = idx & 0x7fffffff;
-        uint64_t leafbits = *(uint64_t *)&data[idx];
-        uint64_t v = extract(key, 32 - S, K);
-        int count = __builtin_popcountl(leafbits & ((2UL << v) - 1));
-        return *(uint32_t *)&data[idx + count + 1];
-      }
-
-      bits = ((Node *)&data[idx])->bits;
-      v = extract(key, 32 - offset, K);
+    for (;;) {
+      Node &node = *(Node *)&data[idx];
+      uint32_t v = extract(key, 32 - offset, K);
+      if (!(node.bits & (1UL << v)))
+        break;
+      idx = node.base1 + popcnt(node.bits, v) * sizeof(Node);
       offset += K;
     }
 
-    Node &c = *(Node *)&data[idx];
-    int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
-    return *(uint32_t *)&data[c.base0 + (count - 1) * 4];
+    Node &node = *(Node *)&data[idx];
+    uint32_t v = extract(key, 32 - offset, K);
+    int count = __builtin_popcountl(node.leafbits & ((2UL << v) - 1));
+    return *(uint32_t *)&data[node.base0 + (count - 1) * 4];
   }
 
   void info() {
