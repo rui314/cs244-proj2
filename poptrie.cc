@@ -885,6 +885,10 @@ int main() {
   dur = bench<Poptrie8>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
+  std::cout << "Modified Poptrie 9: ";
+  dur = bench<Poptrie9>(rand, repeat, false);
+  printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
+
   std::cout << "Modified Poptrie 10: ";
   dur = bench<Poptrie10>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
