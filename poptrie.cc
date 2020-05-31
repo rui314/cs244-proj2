@@ -656,13 +656,22 @@ public:
       uint32_t v = extract(key, 32 - offset, K);
       if (!(node.bits & (1UL << v)))
         break;
+
       idx = node.base1 + popcnt(node.bits, v) * sizeof(Node);
       offset += K;
+
+      if (node.leafbits & (1UL << v)) {
+        uint64_t leafbits = *(uint64_t *)&data[idx];
+        uint64_t v = extract(key, 32 - offset, K);
+        int count = __builtin_popcountl(leafbits & ((2UL << v) - 1)) * 4;
+        return *(uint32_t *)&data[idx + count + 4];
+      }
     }
 
     Node &node = *(Node *)&data[idx];
     uint32_t v = extract(key, 32 - offset, K);
-    int count = __builtin_popcountl(node.leafbits & ((2UL << v) - 1));
+    uint32_t bits = ~node.bits & node.leafbits;
+    int count = __builtin_popcountl(bits & ((2UL << v) - 1));
     return *(uint32_t *)&data[node.base0 + (count - 1) * 4];
   }
 
@@ -695,6 +704,25 @@ private:
     return true;
   }
 
+  uint64_t get_leaf_bits(Trie::Node &node) {
+    uint64_t leafbits = 0;
+    uint32_t last = -1;
+
+    for (size_t i = 0; i < 64; i++)  {
+      Trie::Node &child = node.children[i];
+      if (!child.is_leaf)
+        continue;
+      if (child.val != last)
+        leafbits |= 1L << i;
+      last = child.val;
+    }
+    return leafbits;
+  }
+
+  bool is_compact(Trie::Node &node) {
+    return is_leaf_only(node) && get_leaf_bits(node) <= 4;
+  }
+
   // Add a leaf-only root node to `leaf_only_node` vector.
   // The bit vector and its leaf values are written to `leaf_only_node`
   // vector next to each other for better locality.
@@ -720,32 +748,46 @@ private:
   }
 
   void import(Trie::Node &from, int idx) {
+    if (is_compact(from)) {
+      uint64_t leafbits = get_leaf_bits(from);
+      assert(__builtin_popcountl(leafbits) <= 4);
+      *(uint64_t *)&data[idx] = leafbits;
+      
+      for (int i = 0; i < 64; i++) {
+        if (leafbits & (1L << i)) {
+          data.resize(data.size() + 4);
+          *(uint32_t *)&data[data.size() - 4] = from.children[i].val;
+        }
+      }
+      return;
+    }
+
     int nleaves = 0;
     for (Trie::Node &node : from.children)
       if (node.is_leaf)
         nleaves++;
 
     Node node = {};
+    node.leafbits = get_leaf_bits(from);
     node.base1 = data.size();
     data.resize(data.size() + ((64 - nleaves) * sizeof(Node)));
     node.base0 = data.size();
 
-    uint32_t last = -1;
+    for (size_t i = 0; i < from.children.size(); i++)
+      if (!from.children[i].is_leaf)
+        node.bits |= 1L<<i;
+
+    for (int i = 0; i < 64; i++) {
+      if (node.leafbits & (1L << i)) {
+        data.resize(data.size() + 4);
+        *(uint32_t *)&data[data.size() - 4] = from.children[i].val;
+      }
+    }
 
     for (size_t i = 0; i < from.children.size(); i++) {
       Trie::Node &child = from.children[i];
-      if (!child.is_leaf) {
-        node.bits |= 1L<<i;
-        continue;
-      }
-
-      if (child.val == last)
-        continue;
-
-      node.leafbits |= 1L<<i;
-      data.resize(data.size() + 4);
-      *(uint32_t *)&data[data.size() - 4] = child.val;
-      last = child.val;
+      if (!child.is_leaf && is_compact(child))
+        node.leafbits |= 1L<<i;
     }
 
     dist[__builtin_popcountl(node.leafbits)]++;
