@@ -645,8 +645,8 @@ public:
       idx = idx & 0x3fffffff;
       uint64_t leafbits = *(uint64_t *)&data[idx];
       uint64_t v = extract(key, 32 - S, K);
-      int count = __builtin_popcountl(leafbits & ((2UL << v) - 1));
-      return *(uint32_t *)&data[idx + count + 1];
+      int count = __builtin_popcountl(leafbits & ((2UL << v) - 1)) * 4;
+      return *(uint32_t *)&data[idx + count + 4];
     }
 
     uint32_t offset = S;
@@ -812,7 +812,7 @@ static void test() {
   for (Range &range : ranges52)
     trie.insert(range.addr, range.masklen, range.val);
 
-  Poptrie ptrie(trie);
+  Poptrie10 ptrie(trie);
 
   auto find = [&](uint32_t addr) -> uint32_t {
                 for (int i = ranges52.size() - 1; i >= 0; i--)
