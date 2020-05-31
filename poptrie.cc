@@ -628,6 +628,8 @@ public:
         continue;
       }
 
+      assert(!is_compact(from.roots[i]));
+
       int idx = data.size();
       direct_indices[i] = idx;
       data.resize(data.size() + sizeof(Node));
@@ -720,7 +722,8 @@ private:
   }
 
   bool is_compact(Trie::Node &node) {
-    return is_leaf_only(node) && get_leaf_bits(node) <= 4;
+    return !node.is_leaf && is_leaf_only(node) &&
+           __builtin_popcountl(get_leaf_bits(node)) <= 4;
   }
 
   // Add a leaf-only root node to `leaf_only_node` vector.
@@ -753,13 +756,10 @@ private:
       assert(__builtin_popcountl(leafbits) <= 4);
       *(uint64_t *)&data[idx] = leafbits;
       
-      for (int i = 0; i < 64; i++) {
-        if (leafbits & (1L << i)) {
-          data.resize(data.size() + 4);
-          *(uint32_t *)&data[data.size() - 4] = from.children[i].val;
-        }
-      }
-      std::cout << "compact\n";
+      int i = 2;
+      for (int j = 0; j < 64; j++)
+        if (leafbits & (1L << j))
+          *(uint32_t *)&data[idx + i++ * 4] = from.children[j].val;
       return;
     }
 
@@ -785,13 +785,11 @@ private:
       }
     }
 
-    for (size_t i = 0; i < from.children.size(); i++) {
-      Trie::Node &child = from.children[i];
-      if (!child.is_leaf && is_compact(child))
-        node.leafbits |= 1L<<i;
-    }
-
     dist[__builtin_popcountl(node.leafbits)]++;
+
+    for (size_t i = 0; i < from.children.size(); i++)
+      if (is_compact(from.children[i]))
+        node.leafbits |= 1L<<i;
 
     *(Node *)&data[idx] = node;
 
@@ -945,7 +943,7 @@ int main() {
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   std::cout << "Modified Poptrie 10: ";
-  dur = bench<Poptrie10>(rand, repeat, true);
+  dur = bench<Poptrie10>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   return 0;
