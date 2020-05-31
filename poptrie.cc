@@ -128,25 +128,25 @@ public:
 
   __attribute__((noinline))
   uint32_t lookup(uint32_t key) {
-    int didx = direct_indices[key >> (32 - S)];
-    if (didx & 0x80000000)
-      return didx & 0x7fffffff;
+    int idx = direct_indices[key >> (32 - S)];
+    if (idx & 0x80000000)
+      return idx & 0x7fffffff;
 
-    uint32_t cur = didx;
-    uint64_t bits = children[cur].bits;
-    uint32_t v = extract(key, 32 - S, K);
-    uint32_t offset = S + K;
+    uint32_t offset = S;
 
-    while (bits & (1UL << v)) {
-      cur = children[cur].base1 + popcnt(bits, v);
-      bits = children[cur].bits;
-      v = extract(key, 32 - offset, K);
+    for (;;) {
+      Node &node = children[idx];
+      uint32_t v = extract(key, 32 - offset, K);
+      if (!(node.bits & (1UL << v)))
+        break;
+      idx = children[idx].base1 + popcnt(children[idx].bits, v);
       offset += K;
     }
 
-    Node c = children[cur];
-    int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
-    return leaves[c.base0 + count - 1];
+    Node &node = children[idx];
+    uint32_t v = extract(key, 32 - offset, K);
+    int count = __builtin_popcountl(node.leafbits & ((2UL << v) - 1));
+    return leaves[node.base0 + count - 1];
   }
 
   void info() {
