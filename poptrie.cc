@@ -637,31 +637,39 @@ public:
 
   __attribute__((noinline))
   uint32_t lookup(uint32_t key) {
-    uint32_t didx = direct_indices[key >> (32 - S)];
-    if (didx & 0x80000000)
-      return didx & 0x3fffffff;
+    uint32_t idx = direct_indices[key >> (32 - S)];
+    if (idx & 0x80000000)
+      return idx & 0x3fffffff;
 
-    if (didx & 0x40000000) {
-      uint32_t idx = didx & 0x3fffffff;
+    if (idx & 0x40000000) {
+      idx = idx & 0x3fffffff;
       uint64_t leafbits = *(uint64_t *)&data[idx];
       uint64_t v = extract(key, 32 - S, K);
       int count = __builtin_popcountl(leafbits & ((2UL << v) - 1));
       return *(uint32_t *)&data[idx + count + 1];
     }
 
-    uint32_t cur = didx;
-    uint64_t bits = ((Node *)&data[cur])->bits;
+    uint64_t bits = ((Node *)&data[idx])->bits;
     uint32_t v = extract(key, 32 - S, K);
     uint32_t offset = S + K;
 
     while (bits & (1UL << v)) {
-      cur = ((Node *)&data[cur])->base1 + popcnt(bits, v) * sizeof(Node);
-      bits = ((Node *)&data[cur])->bits;
+      idx = ((Node *)&data[idx])->base1 + popcnt(bits, v) * sizeof(Node);
+
+      if (idx & 0x80000000) {
+        idx = idx & 0x7fffffff;
+        uint64_t leafbits = *(uint64_t *)&data[idx];
+        uint64_t v = extract(key, 32 - S, K);
+        int count = __builtin_popcountl(leafbits & ((2UL << v) - 1));
+        return *(uint32_t *)&data[idx + count + 1];
+      }
+
+      bits = ((Node *)&data[idx])->bits;
       v = extract(key, 32 - offset, K);
       offset += K;
     }
 
-    Node &c = *(Node *)&data[cur];
+    Node &c = *(Node *)&data[idx];
     int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
     return *(uint32_t *)&data[c.base0 + (count - 1) * 4];
   }
@@ -670,6 +678,14 @@ public:
     std::cout << " size="
               << (data.size() + direct_indices.size() * sizeof(direct_indices[0]))
               << "\n";
+
+    for (int i = 0; i < 63; i++)
+      dist[i] += dist[i-1];
+
+    std::cout << " dist=";
+    for (int x : dist)
+      std::cout << " " << x;
+    std::cout << "\n";
   }
 
 private:
@@ -740,6 +756,8 @@ private:
       last = child.val;
     }
 
+    dist[__builtin_popcountl(node.leafbits)]++;
+
     *(Node *)&data[idx] = node;
 
     size_t i = 0;
@@ -747,6 +765,8 @@ private:
       if (!from.children[j].is_leaf)
         import(from.children[j], node.base1 + i++ * sizeof(Node));
   }
+
+  int dist[64] = {0};
 
   std::vector<uint32_t> direct_indices;
   std::vector<uint8_t> data;
@@ -890,7 +910,7 @@ int main() {
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   std::cout << "Modified Poptrie 10: ";
-  dur = bench<Poptrie10>(rand, repeat, false);
+  dur = bench<Poptrie10>(rand, repeat, true);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   return 0;
