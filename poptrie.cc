@@ -335,34 +335,34 @@ public:
 
   __attribute__((noinline))
   uint32_t lookup(uint32_t key) {
-    uint32_t didx = direct_indices[key >> (32 - S)];
-    if (didx & 0x80000000)
-      return didx & 0x3fffffff;
+    uint32_t idx = direct_indices[key >> (32 - S)];
+    if (idx & 0x80000000)
+      return idx & 0x3fffffff;
 
-    if (didx & 0x40000000) {
-      uint32_t idx = didx & 0x3fffffff;
+    if (idx & 0x40000000) {
+      idx = idx & 0x3fffffff;
       uint64_t leafbits = *(uint64_t *)&leaf_only_node[idx];
       uint64_t v = extract(key, 32 - S, K);
       int count = __builtin_popcountl(leafbits & ((2UL << v) - 1));
       return leaf_only_node[idx + count + 1];
     }
 
-    uint32_t cur = didx;
-    uint64_t bits = children[cur].bits;
-    uint32_t v = extract(key, 32 - S, K);
-    uint32_t offset = S + K;
+    uint32_t offset = S;
 
-    while (bits & (1UL << v)) {
-      cur = children[cur].base1 + popcnt(bits, v);
-      bits = children[cur].bits;
-      v = extract(key, 32 - offset, K);
+    for (;;) {
+      Node &node = children[idx];
+      uint32_t v = extract(key, 32 - offset, K);
+      if (!(node.bits & (1UL << v)))
+        break;
+      idx = children[idx].base1 + popcnt(children[idx].bits, v);
       offset += K;
     }
 
-    Node c = children[cur];
-    int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
-    return leaves[c.base0 + count - 1];
- }
+    Node &node = children[idx];
+    uint32_t v = extract(key, 32 - offset, K);
+    int count = __builtin_popcountl(node.leafbits & ((2UL << v) - 1));
+    return leaves[node.base0 + count - 1];
+  }
 
   void info() {
     std::cout << "inodes=" << children.size()
