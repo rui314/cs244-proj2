@@ -759,6 +759,7 @@ private:
           *(uint32_t *)&data[data.size() - 4] = from.children[i].val;
         }
       }
+      std::cout << "compact\n";
       return;
     }
 
