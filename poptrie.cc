@@ -607,6 +607,151 @@ private:
   std::vector<uint32_t> leaf_only_node;
 };
 
+class Poptrie10 {
+public:
+  Poptrie10(Trie &from) {
+    direct_indices.resize(1<<S);
+
+    for (int i = 0; i < (1<<S); i++) {
+      if (from.roots[i].is_leaf) {
+        direct_indices[i] = from.roots[i].val | 0x80000000;
+        continue;
+      }
+
+      // This is where the modified Poptrie is different from the
+      // original one. If a root node has no descendent child internal
+      // nodes (i.e. if all children are leaves), the children are
+      // stored to a different array.
+      if (is_leaf_only(from.roots[i])) {
+        direct_indices[i] = data.size() | 0x40000000;
+        import_leaf_only_node(from.roots[i]);
+        continue;
+      }
+
+      int idx = data.size();
+      direct_indices[i] = idx;
+      data.resize(data.size() + sizeof(Node));
+      import(from.roots[i], idx);
+    }
+  }
+
+  __attribute__((noinline))
+  uint32_t lookup(uint32_t key) {
+    uint32_t didx = direct_indices[key >> (32 - S)];
+    if (didx & 0x80000000)
+      return didx & 0x3fffffff;
+
+    if (didx & 0x40000000) {
+      uint32_t idx = didx & 0x3fffffff;
+      uint64_t leafbits = *(uint64_t *)&data[idx];
+      uint64_t v = extract(key, 32 - S, K);
+      int count = __builtin_popcountl(leafbits & ((2UL << v) - 1));
+      return *(uint32_t *)&data[idx + count + 1];
+    }
+
+    uint32_t cur = didx;
+    uint64_t bits = ((Node *)&data[cur])->bits;
+    uint32_t v = extract(key, 32 - S, K);
+    uint32_t offset = S + K;
+
+    while (bits & (1UL << v)) {
+      cur = ((Node *)&data[cur])->base1 + popcnt(bits, v) * sizeof(Node);
+      bits = ((Node *)&data[cur])->bits;
+      v = extract(key, 32 - offset, K);
+      offset += K;
+    }
+
+    Node &c = *(Node *)&data[cur];
+    int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
+    return *(uint32_t *)&data[c.base0 + (count - 1) * 4];
+  }
+
+  void info() {
+    std::cout << " size="
+              << (data.size() + direct_indices.size() * sizeof(direct_indices[0]))
+              << "\n";
+  }
+
+private:
+  struct Node {
+    uint64_t bits = 0;
+    uint64_t leafbits = 0;
+    uint32_t base0 = 0;
+    uint32_t base1 = 0;
+  };
+
+  bool is_leaf_only(Trie::Node &node) {
+    for (Trie::Node &node : node.children)
+      if (!node.is_leaf)
+        return false;
+    return true;
+  }
+
+  // Add a leaf-only root node to `leaf_only_node` vector.
+  // The bit vector and its leaf values are written to `leaf_only_node`
+  // vector next to each other for better locality.
+  void import_leaf_only_node(Trie::Node &node) {
+    int start = data.size();
+    data.resize(data.size() + 12);
+
+    uint64_t leafbits = 1;
+    uint32_t last = node.children[0].val;
+    *(uint32_t *)&data[data.size() - 4] = last;
+
+    for (size_t i = 1; i < node.children.size(); i++) {
+      uint32_t val = node.children[i].val;
+      if (val != last) {
+        leafbits |= 1L<<i;
+        data.resize(data.size() + 4);
+        *(uint32_t *)&data[data.size() - 4] = val;
+        last = val;
+      }
+    }
+
+    *(uint64_t *)&data[start] = leafbits;
+  }
+
+  void import(Trie::Node &from, int idx) {
+    int nleaves = 0;
+    for (Trie::Node &node : from.children)
+      if (node.is_leaf)
+        nleaves++;
+
+    Node node = {};
+    node.base1 = data.size();
+    data.resize(data.size() + ((64 - nleaves) * sizeof(Node)));
+    node.base0 = data.size();
+
+    uint32_t last = -1;
+
+    for (size_t i = 0; i < from.children.size(); i++) {
+      Trie::Node &child = from.children[i];
+      if (!child.is_leaf) {
+        node.bits |= 1L<<i;
+        continue;
+      }
+
+      if (child.val == last)
+        continue;
+
+      node.leafbits |= 1L<<i;
+      data.resize(data.size() + 4);
+      *(uint32_t *)&data[data.size() - 4] = child.val;
+      last = child.val;
+    }
+
+    *(Node *)&data[idx] = node;
+
+    size_t i = 0;
+    for (size_t j = 0; j < from.children.size(); j++)
+      if (!from.children[j].is_leaf)
+        import(from.children[j], node.base1 + i++ * sizeof(Node));
+  }
+
+  std::vector<uint32_t> direct_indices;
+  std::vector<uint8_t> data;
+};
+
 void assert_(uint32_t expected, uint32_t actual, const std::string &code) {
   if (expected == actual) {
     std::cout << code << " => " << expected << "\n";
@@ -742,6 +887,10 @@ int main() {
 
   std::cout << "Modified Poptrie 9: ";
   dur = bench<Poptrie9>(rand, repeat, false);
+  printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
+
+  std::cout << "Modified Poptrie 10: ";
+  dur = bench<Poptrie10>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   return 0;
