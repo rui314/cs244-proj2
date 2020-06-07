@@ -248,13 +248,13 @@ public:
       v = extract(key, 32 - offset, K);
       if (!(node.bits & (1UL << v)))
         break;
-      idx = node.base - popcnt_incl(node.bits, v) * sizeof(Node);
+      idx = node.base + popcnt(node.bits, v) * sizeof(Node);
       offset += K;
     }
 
     Node &c = *(Node *)&data[idx];
     int count = popcnt_incl(c.leafbits, v);
-    return *(uint32_t *)&data[c.base + (count - 1) * 4];
+    return *(uint32_t *)&data[c.base - count * 4];
   }
 
   void info() {
@@ -275,11 +275,7 @@ private:
       if (node.is_leaf)
         nleaves++;
 
-    data.resize(data.size() + ((64 - nleaves) * sizeof(Node)));
-
     Node node = {};
-    node.base = data.size();
-
     uint32_t last = -1;
 
     for (size_t i = 0; i < from.children.size(); i++) {
@@ -298,12 +294,15 @@ private:
       last = child.val;
     }
 
+    node.base = data.size();
     *(Node *)&data[idx] = node;
+
+    data.resize(data.size() + ((64 - nleaves) * sizeof(Node)));
 
     size_t i = 0;
     for (size_t j = 0; j < from.children.size(); j++)
       if (!from.children[j].is_leaf)
-        import(from.children[j], node.base - ++i * sizeof(Node));
+        import(from.children[j], node.base + i++ * sizeof(Node));
   }
 
   std::vector<uint8_t> data;
@@ -516,13 +515,13 @@ public:
       v = extract(key, 32 - offset, K);
       if (!(node.bits & (1UL << v)))
         break;
-      idx = node.base - popcnt_incl(node.bits, v) * sizeof(Node);
+      idx = node.base + popcnt(node.bits, v) * sizeof(Node);
       offset += K;
     }
 
     Node &c = *(Node *)&data[idx];
     int count = popcnt_incl(c.leafbits, v);
-    return *(uint32_t *)&data[c.base + (count - 1) * 4];
+    return *(uint32_t *)&data[c.base - count * 4];
   }
 
   void info() {
@@ -572,11 +571,7 @@ private:
       if (node.is_leaf)
         nleaves++;
 
-    data.resize(data.size() + ((64 - nleaves) * sizeof(Node)));
-
     Node node = {};
-    node.base = data.size();
-
     uint32_t last = -1;
 
     for (size_t i = 0; i < from.children.size(); i++) {
@@ -595,12 +590,15 @@ private:
       last = child.val;
     }
 
+    node.base = data.size();
     *(Node *)&data[idx] = node;
+
+    data.resize(data.size() + ((64 - nleaves) * sizeof(Node)));
 
     size_t i = 0;
     for (size_t j = 0; j < from.children.size(); j++)
       if (!from.children[j].is_leaf)
-        import(from.children[j], node.base - ++i * sizeof(Node));
+        import(from.children[j], node.base + i++ * sizeof(Node));
   }
 
   std::vector<uint8_t> data;
