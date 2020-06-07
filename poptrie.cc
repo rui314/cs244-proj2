@@ -37,6 +37,10 @@ static inline int popcnt(uint64_t x, int len) {
   return __builtin_popcountl(x & ((1UL << len) - 1));
 }
 
+static inline int popcnt_incl(uint64_t x, int len) {
+  return __builtin_popcountl(x & ((2UL << len) - 1));
+}
+
 // A normal multi-way trie. It is hard to directly create a Poptrie,
 // so we construct a normal multi-way trie first and then convert it
 // to a Poptrie.
@@ -145,7 +149,7 @@ public:
 
     Node &node = children[idx];
     uint32_t v = extract(key, 32 - offset, K);
-    int count = __builtin_popcountl(node.leafbits & ((2UL << v) - 1));
+    int count = popcnt_incl(node.leafbits, v);
     return leaves[node.base0 + count - 1];
   }
 
@@ -242,25 +246,27 @@ public:
     uint32_t offset = S + K;
 
     while (bits & (1UL << v)) {
-      cur = ((Node *)&data[cur])->base1 + (popcnt(bits, v) * sizeof(Node));
+      cur = ((Node *)&data[cur])->base - (popcnt_incl(bits, v) * sizeof(Node));
       bits = ((Node *)&data[cur])->bits;
       v = extract(key, 32 - offset, K);
       offset += K;
     }
 
     Node &c = *(Node *)&data[cur];
-    int count = __builtin_popcountl(c.leafbits & ((2UL << v) - 1));
-    return *(uint32_t *)&data[c.base0 + (count - 1) * 4];
+    int count = popcnt_incl(c.leafbits, v);
+    return *(uint32_t *)&data[c.base + (count - 1) * 4];
   }
 
-  void info() {}
+  void info() {
+    size_t size = data.size() + direct_indices.size() * sizeof(direct_indices[0]);
+    std::cout << " size=" << size << "\n";
+  }
 
 private:
   struct Node {
     uint64_t bits = 0;
     uint64_t leafbits = 0;
-    uint32_t base0 = 0;
-    uint32_t base1 = 0;
+    uint32_t base = 0;
   };
 
   void import(Trie::Node &from, int idx) {
@@ -269,10 +275,10 @@ private:
       if (node.is_leaf)
         nleaves++;
 
-    Node node = {};
-    node.base1 = data.size();
     data.resize(data.size() + ((64 - nleaves) * sizeof(Node)));
-    node.base0 = data.size();
+
+    Node node = {};
+    node.base = data.size();
 
     uint32_t last = -1;
 
@@ -297,7 +303,7 @@ private:
     size_t i = 0;
     for (size_t j = 0; j < from.children.size(); j++)
       if (!from.children[j].is_leaf)
-        import(from.children[j], node.base1 + i++ * sizeof(Node));
+        import(from.children[j], node.base - ++i * sizeof(Node));
   }
 
   std::vector<uint8_t> data;
@@ -343,7 +349,7 @@ public:
       idx = idx & 0x3fffffff;
       uint64_t leafbits = *(uint64_t *)&leaf_only_node[idx];
       uint64_t v = extract(key, 32 - S, K);
-      int count = __builtin_popcountl(leafbits & ((2UL << v) - 1));
+      int count = popcnt_incl(leafbits, v);
       return leaf_only_node[idx + count + 1];
     }
 
@@ -360,7 +366,7 @@ public:
 
     Node &node = children[idx];
     uint32_t v = extract(key, 32 - offset, K);
-    int count = __builtin_popcountl(node.leafbits & ((2UL << v) - 1));
+    int count = popcnt_incl(node.leafbits, v);
     return leaves[node.base0 + count - 1];
   }
 
@@ -498,7 +504,7 @@ public:
       idx = idx & 0x3fffffff;
       uint64_t leafbits = *(uint64_t *)&leaf_only_node[idx];
       uint64_t v = extract(key, 32 - S, K);
-      int count = __builtin_popcountl(leafbits & ((2UL << v) - 1));
+      int count = popcnt_incl(leafbits, v);
       return leaf_only_node[idx + count + 1];
     }
 
@@ -515,7 +521,7 @@ public:
 
     Node &node = *(Node *)&data[idx];
     uint32_t v = extract(key, 32 - offset, K);
-    int count = __builtin_popcountl(node.leafbits & ((2UL << v) - 1));
+    int count = popcnt_incl(node.leafbits, v);
     return *(uint32_t *)&data[node.base0 + (count - 1) * 4];
   }
 
@@ -647,7 +653,7 @@ public:
       idx = idx & 0x3fffffff;
       uint64_t leafbits = *(uint64_t *)&data[idx];
       uint64_t v = extract(key, 32 - S, K);
-      int count = __builtin_popcountl(leafbits & ((2UL << v) - 1)) * 4;
+      int count = popcnt_incl(leafbits, v) * 4;
       return *(uint32_t *)&data[idx + count + 4];
     }
 
@@ -665,7 +671,7 @@ public:
       if (node.leafbits & (1UL << v)) {
         uint64_t leafbits = *(uint64_t *)&data[idx];
         uint64_t v = extract(key, 32 - offset, K);
-        int count = __builtin_popcountl(leafbits & ((2UL << v) - 1)) * 4;
+        int count = popcnt_incl(leafbits, v) * 4;
         return *(uint32_t *)&data[idx + count + 4];
       }
     }
@@ -673,7 +679,7 @@ public:
     Node &node = *(Node *)&data[idx];
     uint32_t v = extract(key, 32 - offset, K);
     uint32_t bits = ~node.bits & node.leafbits;
-    int count = __builtin_popcountl(bits & ((2UL << v) - 1));
+    int count = popcnt_incl(bits, v);
     return *(uint32_t *)&data[node.base0 + (count - 1) * 4];
   }
 
