@@ -236,23 +236,23 @@ public:
 
   __attribute__((noinline))
   uint32_t lookup(uint32_t key) {
-    int didx = direct_indices[key >> (32 - S)];
-    if (didx & 0x80000000)
-      return didx & 0x7fffffff;
+    int idx = direct_indices[key >> (32 - S)];
+    if (idx & 0x80000000)
+      return idx & 0x7fffffff;
 
-    uint32_t cur = didx;
-    uint64_t bits = ((Node *)&data[cur])->bits;
-    uint32_t v = extract(key, 32 - S, K);
-    uint32_t offset = S + K;
+    uint32_t offset = S;
+    uint32_t v;
 
-    while (bits & (1UL << v)) {
-      cur = ((Node *)&data[cur])->base - (popcnt_incl(bits, v) * sizeof(Node));
-      bits = ((Node *)&data[cur])->bits;
+    for (;;) {
+      Node &node = *(Node *)&data[idx];
       v = extract(key, 32 - offset, K);
+      if (!(node.bits & (1UL << v)))
+        break;
+      idx = node.base - popcnt_incl(node.bits, v) * sizeof(Node);
       offset += K;
     }
 
-    Node &c = *(Node *)&data[cur];
+    Node &c = *(Node *)&data[idx];
     int count = popcnt_incl(c.leafbits, v);
     return *(uint32_t *)&data[c.base + (count - 1) * 4];
   }
@@ -354,10 +354,11 @@ public:
     }
 
     uint32_t offset = S;
+    uint32_t v;
 
     for (;;) {
       Node &node = children[idx];
-      uint32_t v = extract(key, 32 - offset, K);
+      v = extract(key, 32 - offset, K);
       if (!(node.bits & (1UL << v)))
         break;
       idx = node.base1 + popcnt(node.bits, v);
@@ -365,7 +366,6 @@ public:
     }
 
     Node &node = children[idx];
-    uint32_t v = extract(key, 32 - offset, K);
     int count = popcnt_incl(node.leafbits, v);
     return leaves[node.base0 + count - 1];
   }
@@ -505,24 +505,24 @@ public:
       uint64_t leafbits = *(uint64_t *)&data[idx];
       uint64_t v = extract(key, 32 - S, K);
       int count = popcnt_incl(leafbits, v);
-      return *(uint32_t *)&data[idx + count + 1];
+      return *(uint32_t *)&data[idx + (count - 1) * 4];
     }
 
     uint32_t offset = S;
+    uint32_t v;
 
     for (;;) {
       Node &node = *(Node *)&data[idx];
-      uint32_t v = extract(key, 32 - offset, K);
+      v = extract(key, 32 - offset, K);
       if (!(node.bits & (1UL << v)))
         break;
       idx = node.base - popcnt_incl(node.bits, v) * sizeof(Node);
       offset += K;
     }
 
-    Node &node = *(Node *)&data[idx];
-    uint32_t v = extract(key, 32 - offset, K);
-    int count = popcnt_incl(node.leafbits, v);
-    return *(uint32_t *)&data[node.base + (count + 1) * 4];
+    Node &c = *(Node *)&data[idx];
+    int count = popcnt_incl(c.leafbits, v);
+    return *(uint32_t *)&data[c.base + (count - 1) * 4];
   }
 
   void info() {
@@ -534,8 +534,7 @@ private:
   struct Node {
     uint64_t bits = 0;
     uint64_t leafbits = 0;
-    uint32_t base0 = 0;
-    uint32_t base1 = 0;
+    uint32_t base;
   };
 
   bool is_leaf_only(Trie::Node &node) {
@@ -573,8 +572,9 @@ private:
       if (node.is_leaf)
         nleaves++;
 
-    Node node = {};
     data.resize(data.size() + ((64 - nleaves) * sizeof(Node)));
+
+    Node node = {};
     node.base = data.size();
 
     uint32_t last = -1;
