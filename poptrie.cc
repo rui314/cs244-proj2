@@ -650,51 +650,42 @@ public:
     }
 
     uint32_t offset = S;
+    uint32_t v;
 
     for (;;) {
       Node &node = *(Node *)&data[idx];
-      uint32_t v = extract(key, 32 - offset, K);
+      v = extract(key, 32 - offset, K);
+
       if (!(node.bits & (1UL << v)))
         break;
 
-      idx = node.base1 + popcnt(node.bits, v) * sizeof(Node);
+      idx = node.base + popcnt(node.bits, v) * sizeof(Node);
       offset += K;
 
       if (node.leafbits & (1UL << v)) {
         uint64_t leafbits = *(uint64_t *)&data[idx];
         uint64_t v = extract(key, 32 - offset, K);
-        int count = popcnt_incl(leafbits, v) * 4;
-        return *(uint32_t *)&data[idx + count + 4];
+        int count = popcnt_incl(leafbits, v);
+        return *(uint32_t *)&data[idx + count * 4 + 4];
       }
     }
 
-    Node &node = *(Node *)&data[idx];
-    uint32_t v = extract(key, 32 - offset, K);
-    uint32_t bits = ~node.bits & node.leafbits;
+    Node &c = *(Node *)&data[idx];
+    uint32_t bits = ~c.bits & c.leafbits;
     int count = popcnt_incl(bits, v);
-    return *(uint32_t *)&data[node.base0 + (count - 1) * 4];
+    return *(uint32_t *)&data[c.base - count * 4];
   }
 
   void info() {
-    std::cout << " size="
-              << (data.size() + direct_indices.size() * sizeof(direct_indices[0]))
-              << "\n";
-
-    for (int i = 0; i < 63; i++)
-      dist[i] += dist[i-1];
-
-    std::cout << " dist=";
-    for (int x : dist)
-      std::cout << " " << x;
-    std::cout << "\n";
+    size_t size = data.size() + direct_indices.size() * sizeof(direct_indices[0]);
+    std::cout << " size=" << size << "\n";
   }
 
 private:
   struct Node {
     uint64_t bits = 0;
     uint64_t leafbits = 0;
-    uint32_t base0 = 0;
-    uint32_t base1 = 0;
+    uint32_t base = 0;
   };
 
   bool is_leaf_only(Trie::Node &node) {
@@ -768,9 +759,6 @@ private:
 
     Node node = {};
     node.leafbits = get_leaf_bits(from);
-    node.base1 = data.size();
-    data.resize(data.size() + ((64 - nleaves) * sizeof(Node)));
-    node.base0 = data.size();
 
     for (size_t i = 0; i < from.children.size(); i++)
       if (!from.children[i].is_leaf)
@@ -783,21 +771,20 @@ private:
       }
     }
 
-    dist[__builtin_popcountl(node.leafbits)]++;
-
     for (size_t i = 0; i < from.children.size(); i++)
       if (is_compact(from.children[i]))
         node.leafbits |= 1L<<i;
 
+    node.base = data.size();
     *(Node *)&data[idx] = node;
+
+    data.resize(data.size() + ((64 - nleaves) * sizeof(Node)));
 
     size_t i = 0;
     for (size_t j = 0; j < from.children.size(); j++)
       if (!from.children[j].is_leaf)
-        import(from.children[j], node.base1 + i++ * sizeof(Node));
+        import(from.children[j], node.base + i++ * sizeof(Node));
   }
-
-  int dist[64] = {0};
 
   std::vector<uint32_t> direct_indices;
   std::vector<uint8_t> data;
