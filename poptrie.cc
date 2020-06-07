@@ -27,7 +27,7 @@ std::default_random_engine rand_engine;
 
 class Trie;
 class Poptrie;
-class Poptrie2;
+class Poptrie1;
 
 static inline uint32_t extract(uint32_t bits, int start, int len) {
   return (bits >> (start - len)) & ((1L<<len) - 1);
@@ -110,6 +110,33 @@ public:
 
   std::vector<Node> roots;
 };
+
+static bool is_leaf_only(Trie::Node &node) {
+  for (Trie::Node &node : node.children)
+    if (!node.is_leaf)
+      return false;
+  return true;
+}
+
+static uint64_t get_leaf_bits(Trie::Node &node) {
+  uint64_t leafbits = 0;
+  uint32_t last = -1;
+
+  for (size_t i = 0; i < 64; i++)  {
+    Trie::Node &child = node.children[i];
+    if (!child.is_leaf)
+      continue;
+    if (child.val != last)
+      leafbits |= 1L << i;
+    last = child.val;
+  }
+  return leafbits;
+}
+
+static bool is_compact(Trie::Node &node) {
+  return !node.is_leaf && is_leaf_only(node) &&
+    __builtin_popcountl(get_leaf_bits(node)) <= 4;
+}
 
 // A Poptrie implementation as explained in the paper.
 class Poptrie {
@@ -216,9 +243,9 @@ private:
   std::vector<uint32_t> direct_indices;
 };
 
-class Poptrie8 {
+class Poptrie2 {
 public:
-  Poptrie8(Trie &from) {
+  Poptrie2(Trie &from) {
     direct_indices.resize(1<<S);
 
     for (int i = 0; i < (1<<S); i++) {
@@ -310,9 +337,9 @@ private:
 };
 
 // A modified version of Poptrie.
-class Poptrie2 {
+class Poptrie1 {
 public:
-  Poptrie2(Trie &from) {
+  Poptrie1(Trie &from) {
     direct_indices.resize(1<<S);
 
     for (int i = 0; i < (1<<S); i++) {
@@ -465,9 +492,113 @@ private:
   std::vector<uint32_t> leaf_only_node;
 };
 
-class Poptrie9 {
+class Poptrie3 {
 public:
-  Poptrie9(Trie &from) {
+  Poptrie3(Trie &from) {
+    direct_indices.resize(1<<S);
+
+    for (int i = 0; i < (1<<S); i++) {
+      if (from.roots[i].is_leaf) {
+        direct_indices[i] = from.roots[i].val | 0x80000000;
+        continue;
+      }
+
+      int idx = children.size();
+      direct_indices[i] = idx;
+      children.push_back({});
+      import(from.roots[i], idx);
+    }
+  }
+
+  __attribute__((noinline))
+  uint32_t lookup(uint32_t key) {
+    int idx = direct_indices[key >> (32 - S)];
+    if (idx & 0x80000000)
+      return idx & 0x7fffffff;
+
+    uint32_t offset = S;
+
+    for (;;) {
+      Node &node = children[idx];
+      uint32_t v = extract(key, 32 - offset, K);
+      if (!(node.bits & (1UL << v)))
+        break;
+      idx = node.base1 + popcnt(node.bits, v);
+      offset += K;
+    }
+
+    Node &node = children[idx];
+    uint32_t v = extract(key, 32 - offset, K);
+    int count = popcnt_incl(node.leafbits, v);
+    return leaves[node.base0 + count - 1];
+  }
+
+  void info() {
+    std::cout << "inodes=" << children.size()
+              << " leaves=" << leaves.size()
+              << " size=" << (children.size() * sizeof(children[0]) +
+                              leaves.size() * sizeof(leaves[0]) +
+                              direct_indices.size() * sizeof(direct_indices[0]))
+              << "\n";
+
+    int count[64] = {0};
+    for (uint32_t idx : direct_indices)
+      if ((idx & 0x80000000) == 0)
+        count[__builtin_popcountl(children[idx].bits)]++;
+    std::cout << "dist:";
+    for (int i = 0; i < 64; i++)
+      std::cout << " " << count[i];
+    std::cout << "\n";
+  }
+
+private:
+  struct Node {
+    uint64_t bits = 0;
+    uint64_t leafbits = 0;
+    uint32_t base0 = 0;
+    uint32_t base1 = 0;
+  };
+
+  void import(Trie::Node &from, int idx) {
+    assert(from.children.size() == (1<<K));
+    int start = children.size();
+
+    for (Trie::Node &node : from.children)
+      if (!node.is_leaf)
+        children.push_back({});
+
+    Node &to = children[idx];
+    to.base0 = leaves.size();
+    to.base1 = start;
+
+    for (size_t i = 0; i < from.children.size(); i++)
+      if (!from.children[i].is_leaf)
+        to.bits |= 1L<<i;
+
+    for (size_t i = 0; i < from.children.size(); i++) {
+      if (from.children[i].is_leaf) {
+        if (leaves.size() == to.base0 ||
+            leaves.back() != from.children[i].val) {
+          to.leafbits |= 1L<<i;
+          leaves.push_back(from.children[i].val);
+        }
+      }
+    }
+
+    size_t i = 0;
+    for (size_t j = 0; j < from.children.size(); j++)
+      if (!from.children[j].is_leaf)
+        import(from.children[j], start + i++);
+  }
+
+  std::vector<Node> children;
+  std::vector<uint32_t> leaves;
+  std::vector<uint32_t> direct_indices;
+};
+
+class Poptrie4 {
+public:
+  Poptrie4(Trie &from) {
     direct_indices.resize(1<<S);
 
     for (int i = 0; i < (1<<S); i++) {
@@ -688,33 +819,6 @@ private:
     uint32_t base = 0;
   };
 
-  bool is_leaf_only(Trie::Node &node) {
-    for (Trie::Node &node : node.children)
-      if (!node.is_leaf)
-        return false;
-    return true;
-  }
-
-  uint64_t get_leaf_bits(Trie::Node &node) {
-    uint64_t leafbits = 0;
-    uint32_t last = -1;
-
-    for (size_t i = 0; i < 64; i++)  {
-      Trie::Node &child = node.children[i];
-      if (!child.is_leaf)
-        continue;
-      if (child.val != last)
-        leafbits |= 1L << i;
-      last = child.val;
-    }
-    return leafbits;
-  }
-
-  bool is_compact(Trie::Node &node) {
-    return !node.is_leaf && is_leaf_only(node) &&
-           __builtin_popcountl(get_leaf_bits(node)) <= 4;
-  }
-
   // Add a leaf-only root node to `leaf_only_node` vector.
   // The bit vector and its leaf values are written to `leaf_only_node`
   // vector next to each other for better locality.
@@ -909,26 +1013,26 @@ int main() {
             << "S=" << S << " K=" << K << "\n";
 
   dur = bench<Poptrie>(rand, repeat, false);
-  dur = bench<Poptrie2>(rand, repeat, false);
+  dur = bench<Poptrie1>(rand, repeat, false);
 
-  std::cout << "Original Poptrie: ";
+  std::cout << "     Original: ";
   dur = bench<Poptrie>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
-  std::cout << "Modified Poptrie 2: ";
+  std::cout << "(1) Leaf-only: ";
+  dur = bench<Poptrie1>(rand, repeat, false);
+  printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
+
+  std::cout << "   (2) Layout: ";
   dur = bench<Poptrie2>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
-  std::cout << "Modified Poptrie 8: ";
-  dur = bench<Poptrie8>(rand, repeat, false);
+  std::cout << "   (3) Embed: ";
+  dur = bench<Poptrie3>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
-  std::cout << "Modified Poptrie 9: ";
-  dur = bench<Poptrie9>(rand, repeat, false);
-  printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
-
-  std::cout << "Modified Poptrie 10: ";
-  dur = bench<Poptrie10>(rand, repeat, false);
+  std::cout << "    (1) & (2): ";
+  dur = bench<Poptrie4>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   return 0;
