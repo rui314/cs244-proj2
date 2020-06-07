@@ -482,7 +482,7 @@ public:
       // nodes (i.e. if all children are leaves), the children are
       // stored to a different array.
       if (is_leaf_only(from.roots[i])) {
-        direct_indices[i] = leaf_only_node.size() | 0x40000000;
+        direct_indices[i] = data.size() | 0x40000000;
         import_leaf_only_node(from.roots[i]);
         continue;
       }
@@ -502,10 +502,10 @@ public:
 
     if (idx & 0x40000000) {
       idx = idx & 0x3fffffff;
-      uint64_t leafbits = *(uint64_t *)&leaf_only_node[idx];
+      uint64_t leafbits = *(uint64_t *)&data[idx];
       uint64_t v = extract(key, 32 - S, K);
       int count = popcnt_incl(leafbits, v);
-      return leaf_only_node[idx + count + 1];
+      return *(uint32_t *)&data[idx + count + 1];
     }
 
     uint32_t offset = S;
@@ -526,10 +526,8 @@ public:
   }
 
   void info() {
-    std::cout << " size=" << (data.size() +
-                              direct_indices.size() * sizeof(direct_indices[0]) +
-                              leaf_only_node.size() * sizeof(leaf_only_node[0]))
-              << "\n";
+    size_t size = data.size() + direct_indices.size() * sizeof(direct_indices[0]);
+    std::cout << " size=" << size << "\n";
   }
 
 private:
@@ -547,28 +545,26 @@ private:
     return true;
   }
 
-  // Add a leaf-only root node to `leaf_only_node` vector.
-  // The bit vector and its leaf values are written to `leaf_only_node`
-  // vector next to each other for better locality.
   void import_leaf_only_node(Trie::Node &node) {
-    int start = leaf_only_node.size();
-    leaf_only_node.push_back(0);
-    leaf_only_node.push_back(0);
+    int start = data.size();
+    data.resize(data.size() + 8);
 
     uint64_t leafbits = 1;
     uint32_t last = node.children[0].val;
-    leaf_only_node.push_back(last);
+    data.resize(data.size() + 4);
+    *(uint32_t *)&data[data.size() - 4] = last;
 
     for (size_t i = 1; i < node.children.size(); i++) {
       uint32_t val = node.children[i].val;
       if (val != last) {
         leafbits |= 1L<<i;
-        leaf_only_node.push_back(val);
+        data.resize(data.size() + 4);
+        *(uint32_t *)&data[data.size() - 4] = val;
         last = val;
       }
     }
 
-    *(uint64_t *)&leaf_only_node[start] = leafbits;
+    *(uint64_t *)&data[start] = leafbits;
   }
 
   void import(Trie::Node &from, int idx) {
@@ -610,7 +606,6 @@ private:
 
   std::vector<uint8_t> data;
   std::vector<uint32_t> direct_indices;
-  std::vector<uint32_t> leaf_only_node;
 };
 
 class Poptrie10 {
