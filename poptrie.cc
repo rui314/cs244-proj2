@@ -515,14 +515,14 @@ public:
       uint32_t v = extract(key, 32 - offset, K);
       if (!(node.bits & (1UL << v)))
         break;
-      idx = node.base1 + popcnt(node.bits, v) * sizeof(Node);
+      idx = node.base - popcnt_incl(node.bits, v) * sizeof(Node);
       offset += K;
     }
 
     Node &node = *(Node *)&data[idx];
     uint32_t v = extract(key, 32 - offset, K);
     int count = popcnt_incl(node.leafbits, v);
-    return *(uint32_t *)&data[node.base0 + (count - 1) * 4];
+    return *(uint32_t *)&data[node.base + (count + 1) * 4];
   }
 
   void info() {
@@ -574,9 +574,8 @@ private:
         nleaves++;
 
     Node node = {};
-    node.base1 = data.size();
     data.resize(data.size() + ((64 - nleaves) * sizeof(Node)));
-    node.base0 = data.size();
+    node.base = data.size();
 
     uint32_t last = -1;
 
@@ -601,7 +600,7 @@ private:
     size_t i = 0;
     for (size_t j = 0; j < from.children.size(); j++)
       if (!from.children[j].is_leaf)
-        import(from.children[j], node.base1 + i++ * sizeof(Node));
+        import(from.children[j], node.base - ++i * sizeof(Node));
   }
 
   std::vector<uint8_t> data;
