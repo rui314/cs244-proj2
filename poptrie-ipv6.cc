@@ -33,8 +33,8 @@ class Trie;
 class Poptrie;
 class Poptrie2;
 
-static inline u128 extract(u128 bits, int start, int len) {
-  return (bits >> (start - len)) & ((1L<<len) - 1);
+static inline int extract(u128 bits, int start, int len) {
+  return (bits >> (start - len)) & ((((u128)1)<<len) - 1);
 }
 
 static inline int popcnt(u64 x, int len) {
@@ -810,12 +810,14 @@ private:
 
 void assert_(u128 expected, u128 actual, const std::string &code) {
   if (expected == actual) {
-    std::cout << code << " => " << (uint64_t)(expected>>64) << (uint64_t)(expected)
+    std::cout << code << " => "
+              << (uint64_t)(expected>>64) << ":" << (uint64_t)(expected)
               << "\n";
   } else {
-    std::cout << code << " => " << (uint64_t)(expected>>64) << (uint64_t)(expected)
+    std::cout << code << " => "
+              << (uint64_t)(expected>>64) << ":" << (uint64_t)(expected)
               << " expected, but got "
-              << (uint64_t)(actual>>64) << (uint64_t)(actual) << "\n";
+              << (uint64_t)(actual>>64) << ":" << (uint64_t)(actual) << "\n";
     exit(1);
   }
 }
@@ -850,7 +852,7 @@ static void test1() {
 
 static bool in_range(Range &range, u128 addr) {
   return range.addr <= addr &&
-         addr < range.addr + (1L << (LEN - range.masklen));
+         addr < range.addr + (((u128)1) << (LEN - range.masklen));
 }
 
 __attribute__((unused))
@@ -859,7 +861,7 @@ static void test() {
   for (Range &range : ranges69)
     trie.insert(range.addr, range.masklen, range.val);
 
-  Poptrie10 ptrie(trie);
+  Poptrie ptrie(trie);
 
   auto find = [&](u128 addr) -> u128 {
                 for (int i = ranges69.size() - 1; i >= 0; i--)
@@ -869,7 +871,7 @@ static void test() {
               };
 
   for (Range &range : ranges69) {
-    u128 end = range.addr + (1L << (LEN - range.masklen)) - 1;
+    u128 end = range.addr + (((u128)1) << (LEN - range.masklen)) - 1;
     ASSERT(find(range.addr), ptrie.lookup(range.addr));
     ASSERT(find(end), ptrie.lookup(end));
   }
