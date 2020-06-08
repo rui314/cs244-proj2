@@ -15,10 +15,13 @@ using std::chrono::high_resolution_clock;
 constexpr int K = 6;
 constexpr int S = 18;
 
+typedef uint32_t u32;
+typedef uint64_t u64;
+
 struct Range {
-  uint32_t addr;
+  u32 addr;
   int masklen;
-  uint32_t val;
+  u32 val;
 };
 
 extern std::vector<Range> ranges46;
@@ -29,15 +32,15 @@ class Trie;
 class Poptrie;
 class Poptrie2;
 
-static inline uint32_t extract(uint32_t bits, int start, int len) {
+static inline u32 extract(u32 bits, int start, int len) {
   return (bits >> (start - len)) & ((1L<<len) - 1);
 }
 
-static inline int popcnt(uint64_t x, int len) {
+static inline int popcnt(u64 x, int len) {
   return __builtin_popcountl(x & ((1UL << len) - 1));
 }
 
-static inline int popcnt_incl(uint64_t x, int len) {
+static inline int popcnt_incl(u64 x, int len) {
   return __builtin_popcountl(x & ((2UL << len) - 1));
 }
 
@@ -48,7 +51,7 @@ class Trie {
 public:
   struct Node {
     std::vector<Node> children;
-    uint32_t val = 0;
+    u32 val = 0;
     bool is_leaf = true;
   };
 
@@ -56,7 +59,7 @@ public:
     roots.resize(1<<S);
   }
 
-  void insert(uint32_t key, int key_len, uint32_t val) {
+  void insert(u32 key, int key_len, u32 val) {
     assert(val < (1 << 30));
 
     if (key_len <= S) {
@@ -69,7 +72,7 @@ public:
     }
 
     Node *cur = &roots[extract(key, 32, S)];
-    uint32_t bits = extract(key, 32 - S, K);
+    u32 bits = extract(key, 32 - S, K);
     int offset = S + K;
 
     while (offset < key_len) {
@@ -87,7 +90,7 @@ public:
     }
   }
 
-  uint32_t lookup(uint32_t key) {
+  u32 lookup(u32 key) {
     Node *cur = &roots[extract(key, 32, S)];
     int offset = S;
     while (!cur->is_leaf) {
@@ -131,13 +134,13 @@ public:
   }
 
   __attribute__((noinline))
-  uint32_t lookup(uint32_t key) {
+  u32 lookup(u32 key) {
     int idx = direct_indices[key >> (32 - S)];
     if (idx & 0x80000000)
       return idx & 0x7fffffff;
 
-    uint32_t offset = S;
-    uint32_t v;
+    u32 offset = S;
+    u32 v;
 
     for (;;) {
       Node &node = children[idx];
@@ -162,7 +165,7 @@ public:
               << "\n";
 
     int count[64] = {0};
-    for (uint32_t idx : direct_indices)
+    for (u32 idx : direct_indices)
       if ((idx & 0x80000000) == 0)
         count[__builtin_popcountl(children[idx].bits)]++;
     std::cout << "dist:";
@@ -173,10 +176,10 @@ public:
 
 private:
   struct Node {
-    uint64_t bits = 0;
-    uint64_t leafbits = 0;
-    uint32_t base0 = 0;
-    uint32_t base1 = 0;
+    u64 bits = 0;
+    u64 leafbits = 0;
+    u32 base0 = 0;
+    u32 base1 = 0;
   };
 
   void import(Trie::Node &from, int idx) {
@@ -212,8 +215,8 @@ private:
   }
 
   std::vector<Node> children;
-  std::vector<uint32_t> leaves;
-  std::vector<uint32_t> direct_indices;
+  std::vector<u32> leaves;
+  std::vector<u32> direct_indices;
 };
 
 // A modified version of Poptrie.
@@ -246,21 +249,21 @@ public:
   }
 
   __attribute__((noinline))
-  uint32_t lookup(uint32_t key) {
-    uint32_t idx = direct_indices[key >> (32 - S)];
+  u32 lookup(u32 key) {
+    u32 idx = direct_indices[key >> (32 - S)];
     if (idx & 0x80000000)
       return idx & 0x3fffffff;
 
     if (idx & 0x40000000) {
       idx = idx & 0x3fffffff;
-      uint64_t leafbits = *(uint64_t *)&leaf_only_node[idx];
-      uint64_t v = extract(key, 32 - S, K);
+      u64 leafbits = *(u64 *)&leaf_only_node[idx];
+      u64 v = extract(key, 32 - S, K);
       int count = popcnt_incl(leafbits, v);
       return leaf_only_node[idx + count + 1];
     }
 
-    uint32_t offset = S;
-    uint32_t v;
+    u32 offset = S;
+    u32 v;
 
     for (;;) {
       Node &node = children[idx];
@@ -286,7 +289,7 @@ public:
               << "\n";
 
     int count[64] = {0};
-    for (uint32_t idx : direct_indices)
+    for (u32 idx : direct_indices)
       if ((idx >> 30) == 0)
         count[__builtin_popcountl(children[idx].bits)]++;
     std::cout << "dist:";
@@ -297,10 +300,10 @@ public:
 
 private:
   struct Node {
-    uint64_t bits = 0;
-    uint64_t leafbits = 0;
-    uint32_t base0 = 0;
-    uint32_t base1 = 0;
+    u64 bits = 0;
+    u64 leafbits = 0;
+    u32 base0 = 0;
+    u32 base1 = 0;
   };
 
   bool is_leaf_only(Trie::Node &node) {
@@ -318,12 +321,12 @@ private:
     leaf_only_node.push_back(0);
     leaf_only_node.push_back(0);
 
-    uint64_t leafbits = 1;
-    uint32_t last = node.children[0].val;
+    u64 leafbits = 1;
+    u32 last = node.children[0].val;
     leaf_only_node.push_back(last);
 
     for (size_t i = 1; i < node.children.size(); i++) {
-      uint32_t val = node.children[i].val;
+      u32 val = node.children[i].val;
       if (val != last) {
         leafbits |= 1L<<i;
         leaf_only_node.push_back(val);
@@ -331,7 +334,7 @@ private:
       }
     }
 
-    *(uint64_t *)&leaf_only_node[start] = leafbits;
+    *(u64 *)&leaf_only_node[start] = leafbits;
   }
 
   void import(Trie::Node &from, int idx) {
@@ -367,9 +370,9 @@ private:
   }
 
   std::vector<Node> children;
-  std::vector<uint32_t> leaves;
-  std::vector<uint32_t> direct_indices;
-  std::vector<uint32_t> leaf_only_node;
+  std::vector<u32> leaves;
+  std::vector<u32> direct_indices;
+  std::vector<u32> leaf_only_node;
 };
 
 class Poptrie3 {
@@ -391,13 +394,13 @@ public:
   }
 
   __attribute__((noinline))
-  uint32_t lookup(uint32_t key) {
+  u32 lookup(u32 key) {
     int idx = direct_indices[key >> (32 - S)];
     if (idx & 0x80000000)
       return idx & 0x7fffffff;
 
-    uint32_t offset = S;
-    uint32_t v;
+    u32 offset = S;
+    u32 v;
 
     for (;;) {
       Node &node = *(Node *)&data[idx];
@@ -410,17 +413,17 @@ public:
 
     Node &node = *(Node *)&data[idx];
     int count = popcnt_incl(node.leafbits, v);
-    return *(uint32_t *)&data[node.base0 + (count - 1) * 4];
+    return *(u32 *)&data[node.base0 + (count - 1) * 4];
   }
 
   void info() {}
 
 private:
   struct Node {
-    uint64_t bits = 0;
-    uint64_t leafbits = 0;
-    uint32_t base0 = 0;
-    uint32_t base1 = 0;
+    u64 bits = 0;
+    u64 leafbits = 0;
+    u32 base0 = 0;
+    u32 base1 = 0;
   };
 
   void import(Trie::Node &from, int idx) {
@@ -434,7 +437,7 @@ private:
     data.resize(data.size() + ((64 - nleaves) * sizeof(Node)));
     node.base0 = data.size();
 
-    uint32_t last = -1;
+    u32 last = -1;
 
     for (size_t i = 0; i < from.children.size(); i++) {
       Trie::Node &child = from.children[i];
@@ -448,7 +451,7 @@ private:
 
       node.leafbits |= 1L<<i;
       data.resize(data.size() + 4);
-      *(uint32_t *)&data[data.size() - 4] = child.val;
+      *(u32 *)&data[data.size() - 4] = child.val;
       last = child.val;
     }
 
@@ -461,7 +464,7 @@ private:
   }
 
   std::vector<uint8_t> data;
-  std::vector<uint32_t> direct_indices;
+  std::vector<u32> direct_indices;
 };
 
 class Poptrie4 {
@@ -493,21 +496,21 @@ public:
   }
 
   __attribute__((noinline))
-  uint32_t lookup(uint32_t key) {
-    uint32_t idx = direct_indices[key >> (32 - S)];
+  u32 lookup(u32 key) {
+    u32 idx = direct_indices[key >> (32 - S)];
     if (idx & 0x80000000)
       return idx & 0x3fffffff;
 
     if (idx & 0x40000000) {
       idx = idx & 0x3fffffff;
-      uint64_t leafbits = *(uint64_t *)&data[idx];
-      uint64_t v = extract(key, 32 - S, K);
+      u64 leafbits = *(u64 *)&data[idx];
+      u64 v = extract(key, 32 - S, K);
       int count = popcnt_incl(leafbits, v);
-      return *(uint32_t *)&data[idx + 8 + (count - 1) * 4];
+      return *(u32 *)&data[idx + 8 + (count - 1) * 4];
     }
 
-    uint32_t offset = S;
-    uint32_t v;
+    u32 offset = S;
+    u32 v;
 
     for (;;) {
       Node &node = *(Node *)&data[idx];
@@ -520,7 +523,7 @@ public:
 
     Node &node = *(Node *)&data[idx];
     int count = popcnt_incl(node.leafbits, v);
-    return *(uint32_t *)&data[node.base0 + (count - 1) * 4];
+    return *(u32 *)&data[node.base0 + (count - 1) * 4];
   }
 
   void info() {
@@ -530,10 +533,10 @@ public:
 
 private:
   struct Node {
-    uint64_t bits = 0;
-    uint64_t leafbits = 0;
-    uint32_t base0 = 0;
-    uint32_t base1 = 0;
+    u64 bits = 0;
+    u64 leafbits = 0;
+    u32 base0 = 0;
+    u32 base1 = 0;
   };
 
   bool is_leaf_only(Trie::Node &node) {
@@ -547,22 +550,22 @@ private:
     int start = data.size();
     data.resize(data.size() + 8);
 
-    uint64_t leafbits = 1;
-    uint32_t last = node.children[0].val;
+    u64 leafbits = 1;
+    u32 last = node.children[0].val;
     data.resize(data.size() + 4);
-    *(uint32_t *)&data[data.size() - 4] = last;
+    *(u32 *)&data[data.size() - 4] = last;
 
     for (size_t i = 1; i < node.children.size(); i++) {
-      uint32_t val = node.children[i].val;
+      u32 val = node.children[i].val;
       if (val != last) {
         leafbits |= 1L<<i;
         data.resize(data.size() + 4);
-        *(uint32_t *)&data[data.size() - 4] = val;
+        *(u32 *)&data[data.size() - 4] = val;
         last = val;
       }
     }
 
-    *(uint64_t *)&data[start] = leafbits;
+    *(u64 *)&data[start] = leafbits;
   }
 
   void import(Trie::Node &from, int idx) {
@@ -576,7 +579,7 @@ private:
     data.resize(data.size() + ((64 - nleaves) * sizeof(Node)));
     node.base0 = data.size();
 
-    uint32_t last = -1;
+    u32 last = -1;
 
     for (size_t i = 0; i < from.children.size(); i++) {
       Trie::Node &child = from.children[i];
@@ -590,7 +593,7 @@ private:
 
       node.leafbits |= 1L<<i;
       data.resize(data.size() + 4);
-      *(uint32_t *)&data[data.size() - 4] = child.val;
+      *(u32 *)&data[data.size() - 4] = child.val;
       last = child.val;
     }
 
@@ -603,7 +606,7 @@ private:
   }
 
   std::vector<uint8_t> data;
-  std::vector<uint32_t> direct_indices;
+  std::vector<u32> direct_indices;
 };
 
 class Poptrie10 {
@@ -637,21 +640,21 @@ public:
   }
 
   __attribute__((noinline))
-  uint32_t lookup(uint32_t key) {
-    uint32_t idx = direct_indices[key >> (32 - S)];
+  u32 lookup(u32 key) {
+    u32 idx = direct_indices[key >> (32 - S)];
     if (idx & 0x80000000)
       return idx & 0x3fffffff;
 
     if (idx & 0x40000000) {
       idx = idx & 0x3fffffff;
-      uint64_t leafbits = *(uint64_t *)&data[idx];
-      uint64_t v = extract(key, 32 - S, K);
+      u64 leafbits = *(u64 *)&data[idx];
+      u64 v = extract(key, 32 - S, K);
       int count = popcnt_incl(leafbits, v) * 4;
-      return *(uint32_t *)&data[idx + count + 4];
+      return *(u32 *)&data[idx + count + 4];
     }
 
-    uint32_t offset = S;
-    uint32_t v;
+    u32 offset = S;
+    u32 v;
 
     for (;;) {
       Node &node = *(Node *)&data[idx];
@@ -663,17 +666,17 @@ public:
       offset += K;
 
       if (node.leafbits & (1UL << v)) {
-        uint64_t leafbits = *(uint64_t *)&data[idx];
-        uint64_t v = extract(key, 32 - offset, K);
+        u64 leafbits = *(u64 *)&data[idx];
+        u64 v = extract(key, 32 - offset, K);
         int count = popcnt_incl(leafbits, v) * 4;
-        return *(uint32_t *)&data[idx + count + 4];
+        return *(u32 *)&data[idx + count + 4];
       }
     }
 
     Node &node = *(Node *)&data[idx];
-    uint32_t bits = ~node.bits & node.leafbits;
+    u32 bits = ~node.bits & node.leafbits;
     int count = popcnt_incl(bits, v);
-    return *(uint32_t *)&data[node.base0 + (count - 1) * 4];
+    return *(u32 *)&data[node.base0 + (count - 1) * 4];
   }
 
   void info() {
@@ -692,10 +695,10 @@ public:
 
 private:
   struct Node {
-    uint64_t bits = 0;
-    uint64_t leafbits = 0;
-    uint32_t base0 = 0;
-    uint32_t base1 = 0;
+    u64 bits = 0;
+    u64 leafbits = 0;
+    u32 base0 = 0;
+    u32 base1 = 0;
   };
 
   bool is_leaf_only(Trie::Node &node) {
@@ -705,9 +708,9 @@ private:
     return true;
   }
 
-  uint64_t get_leaf_bits(Trie::Node &node) {
-    uint64_t leafbits = 0;
-    uint32_t last = -1;
+  u64 get_leaf_bits(Trie::Node &node) {
+    u64 leafbits = 0;
+    u32 last = -1;
 
     for (size_t i = 0; i < 64; i++)  {
       Trie::Node &child = node.children[i];
@@ -732,33 +735,33 @@ private:
     int start = data.size();
     data.resize(data.size() + 12);
 
-    uint64_t leafbits = 1;
-    uint32_t last = node.children[0].val;
-    *(uint32_t *)&data[data.size() - 4] = last;
+    u64 leafbits = 1;
+    u32 last = node.children[0].val;
+    *(u32 *)&data[data.size() - 4] = last;
 
     for (size_t i = 1; i < node.children.size(); i++) {
-      uint32_t val = node.children[i].val;
+      u32 val = node.children[i].val;
       if (val != last) {
         leafbits |= 1L<<i;
         data.resize(data.size() + 4);
-        *(uint32_t *)&data[data.size() - 4] = val;
+        *(u32 *)&data[data.size() - 4] = val;
         last = val;
       }
     }
 
-    *(uint64_t *)&data[start] = leafbits;
+    *(u64 *)&data[start] = leafbits;
   }
 
   void import(Trie::Node &from, int idx) {
     if (is_compact(from)) {
-      uint64_t leafbits = get_leaf_bits(from);
+      u64 leafbits = get_leaf_bits(from);
       assert(__builtin_popcountl(leafbits) <= 4);
-      *(uint64_t *)&data[idx] = leafbits;
+      *(u64 *)&data[idx] = leafbits;
       
       int i = 2;
       for (int j = 0; j < 64; j++)
         if (leafbits & (1L << j))
-          *(uint32_t *)&data[idx + i++ * 4] = from.children[j].val;
+          *(u32 *)&data[idx + i++ * 4] = from.children[j].val;
       return;
     }
 
@@ -780,7 +783,7 @@ private:
     for (int i = 0; i < 64; i++) {
       if (node.leafbits & (1L << i)) {
         data.resize(data.size() + 4);
-        *(uint32_t *)&data[data.size() - 4] = from.children[i].val;
+        *(u32 *)&data[data.size() - 4] = from.children[i].val;
       }
     }
 
@@ -800,11 +803,11 @@ private:
 
   int dist[64] = {0};
 
-  std::vector<uint32_t> direct_indices;
+  std::vector<u32> direct_indices;
   std::vector<uint8_t> data;
 };
 
-void assert_(uint32_t expected, uint32_t actual, const std::string &code) {
+void assert_(u32 expected, u32 actual, const std::string &code) {
   if (expected == actual) {
     std::cout << code << " => " << expected << "\n";
   } else {
@@ -841,7 +844,7 @@ static void test1() {
   ASSERT(5, ptrie.lookup(0x80020000));
 }
 
-static bool in_range(Range &range, uint32_t addr) {
+static bool in_range(Range &range, u32 addr) {
   return range.addr <= addr &&
          addr < range.addr + (1L << (32 - range.masklen));
 }
@@ -854,7 +857,7 @@ static void test() {
 
   Poptrie10 ptrie(trie);
 
-  auto find = [&](uint32_t addr) -> uint32_t {
+  auto find = [&](u32 addr) -> u32 {
                 for (int i = ranges52.size() - 1; i >= 0; i--)
                   if (in_range(ranges52[i], addr))
                     return ranges52[i].val;
@@ -862,7 +865,7 @@ static void test() {
               };
 
   for (Range &range : ranges52) {
-    uint32_t end = range.addr + (1L << (32 - range.masklen)) - 1;
+    u32 end = range.addr + (1L << (32 - range.masklen)) - 1;
     ASSERT(find(range.addr), ptrie.lookup(range.addr));
     ASSERT(find(end), ptrie.lookup(end));
   }
@@ -870,9 +873,9 @@ static void test() {
 
 class Xorshift {
 public:
-  Xorshift(uint32_t seed) : state(seed) {}
+  Xorshift(u32 seed) : state(seed) {}
 
-  uint32_t next() {
+  u32 next() {
     state ^= state << 13;
     state ^= state >> 17;
     state ^= state << 5;
@@ -880,12 +883,12 @@ public:
   }
 
 private:
-  uint32_t state;
+  u32 state;
 };
 
 template <class T>
 __attribute__((unused))
-static std::chrono::microseconds bench(Xorshift rand, uint64_t repeat, bool show_info) {
+static std::chrono::microseconds bench(Xorshift rand, u64 repeat, bool show_info) {
   Trie trie;
   for (Range &range : ranges52)
     trie.insert(range.addr, range.masklen, range.val);
@@ -895,7 +898,7 @@ static std::chrono::microseconds bench(Xorshift rand, uint64_t repeat, bool show
     ptrie.info();
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
-  for (uint64_t i = 0; i < repeat; i++)
+  for (u64 i = 0; i < repeat; i++)
     ptrie.lookup(rand.next());
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
   return std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
@@ -913,11 +916,11 @@ int main() {
                    });
 
 #if 1
-  static std::uniform_int_distribution<uint32_t> dist1(0, 1L<<31);
+  static std::uniform_int_distribution<u32> dist1(0, 1L<<31);
   Xorshift rand(dist1(rand_engine));
 
   std::chrono::microseconds dur;
-  uint64_t repeat = 300*1000*1000;
+  u64 repeat = 300*1000*1000;
 
   std::cout << "Look up random " << repeat << " keys for each test. "
             << "S=" << S << " K=" << K << "\n";
