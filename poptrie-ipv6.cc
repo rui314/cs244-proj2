@@ -14,7 +14,7 @@ using std::chrono::high_resolution_clock;
 
 constexpr int K = 6;
 constexpr int S = 18;
-constexpr int LEN = 32;
+constexpr int LEN = 128;
 
 typedef uint32_t u32;
 typedef uint64_t u64;
