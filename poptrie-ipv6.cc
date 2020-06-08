@@ -941,19 +941,19 @@ int main() {
   //  dur = bench<Poptrie2>(rand, repeat, false);
 
   std::cout << " Original: ";
-  dur = bench<Poptrie>(rand, repeat, true);
+  dur = bench<Poptrie>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   std::cout << "Leaf-only: ";
-  dur = bench<Poptrie2>(rand, repeat, true);
+  dur = bench<Poptrie2>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   std::cout << "   Layout: ";
-  dur = bench<Poptrie3>(rand, repeat, true);
+  dur = bench<Poptrie3>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   std::cout << "     Both: ";
-  dur = bench<Poptrie4>(rand, repeat, true);
+  dur = bench<Poptrie4>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   return 0;
