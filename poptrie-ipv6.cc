@@ -908,8 +908,10 @@ static std::chrono::microseconds bench(Xorshift rand, u64 repeat, bool show_info
     ptrie.info();
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
-  for (u64 i = 0; i < repeat; i++)
-    ptrie.lookup(rand.next());
+  for (u64 i = 0; i < repeat; i++) {
+    u128 addr = ((u128)0x20 << 120) | (rand.next() >> 120);
+    ptrie.lookup(addr);
+  }
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
   return std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
 }
