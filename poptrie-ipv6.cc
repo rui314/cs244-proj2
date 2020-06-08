@@ -72,7 +72,7 @@ public:
       return;
     }
 
-    Node *cur = &roots[extract(key, LEN, S)];
+    Node *cur = &roots[key >> (LEN - S)];
     u32 bits = extract(key, LEN - S, K);
     int offset = S + K;
 
@@ -92,7 +92,7 @@ public:
   }
 
   u32 lookup(u128 key) {
-    Node *cur = &roots[extract(key, LEN, S)];
+    Node *cur = &roots[key >> (LEN - S)];
     int offset = S;
     while (!cur->is_leaf) {
       int bits = extract(key, LEN - offset, K);
@@ -400,12 +400,15 @@ public:
     if (idx & 0x80000000)
       return idx & 0x7fffffff;
 
+    std::cout << "idx=" << (u32)idx << "\n";
+
     u32 offset = S;
     u32 v;
 
     for (;;) {
       Node &node = *(Node *)&data[idx];
       v = extract(key, LEN - offset, K);
+      std::cout << "idx=" << idx << ", v=" << v << "\n";
       if (!(node.bits & (1UL << v)))
         break;
       idx = node.base1 + popcnt(node.bits, v) * sizeof(Node);
@@ -938,6 +941,7 @@ int main() {
   //  dur = bench<Poptrie>(rand, repeat, false);
   //  dur = bench<Poptrie2>(rand, repeat, false);
 
+#if 0
   std::cout << " Original: ";
   dur = bench<Poptrie>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
@@ -945,6 +949,7 @@ int main() {
   std::cout << "Leaf-only: ";
   dur = bench<Poptrie2>(rand, repeat, false);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
+#endif
 
   std::cout << "   Layout: ";
   dur = bench<Poptrie3>(rand, repeat, false);

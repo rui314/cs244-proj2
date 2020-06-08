@@ -72,7 +72,7 @@ public:
       return;
     }
 
-    Node *cur = &roots[extract(key, LEN, S)];
+    Node *cur = &roots[key >> (LEN - S)];
     u32 bits = extract(key, LEN - S, K);
     int offset = S + K;
 
@@ -92,7 +92,7 @@ public:
   }
 
   u32 lookup(u32 key) {
-    Node *cur = &roots[extract(key, LEN, S)];
+    Node *cur = &roots[key >> (LEN - S)];
     int offset = S;
     while (!cur->is_leaf) {
       int bits = extract(key, LEN - offset, K);
