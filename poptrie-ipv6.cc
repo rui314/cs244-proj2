@@ -400,15 +400,12 @@ public:
     if (idx & 0x80000000)
       return idx & 0x7fffffff;
 
-    std::cout << "idx=" << (u32)idx << "\n";
-
     u32 offset = S;
     u32 v;
 
     for (;;) {
       Node &node = *(Node *)&data[idx];
       v = extract(key, LEN - offset, K);
-      std::cout << "idx=" << idx << ", v=" << v << "\n";
       if (!(node.bits & (1UL << v)))
         break;
       idx = node.base1 + popcnt(node.bits, v) * sizeof(Node);
@@ -913,9 +910,11 @@ static std::chrono::microseconds bench(Xorshift rand, u64 repeat, bool show_info
     ptrie.info();
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
-  for (u64 i = 0; i < repeat; i++) {
-    u128 addr = ((u128)0x20 << 120) | (rand.next() >> 120);
-    ptrie.lookup(addr);
+  u64 i = 0;
+  while (i < repeat) {
+    for (Range &range : ranges69)
+      ptrie.lookup(range.addr);
+    i += ranges69.size();
   }
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
   return std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
@@ -933,7 +932,7 @@ int main() {
                 dist1(rand_engine), dist1(rand_engine));
 
   std::chrono::microseconds dur;
-  u64 repeat = 300*1000*1000;
+  u64 repeat = 100*1000*1000;
 
   std::cout << "Look up random " << repeat << " keys for each test. "
             << "S=" << S << " K=" << K << "\n";
@@ -941,22 +940,20 @@ int main() {
   //  dur = bench<Poptrie>(rand, repeat, false);
   //  dur = bench<Poptrie2>(rand, repeat, false);
 
-#if 0
   std::cout << " Original: ";
-  dur = bench<Poptrie>(rand, repeat, false);
+  dur = bench<Poptrie>(rand, repeat, true);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   std::cout << "Leaf-only: ";
-  dur = bench<Poptrie2>(rand, repeat, false);
+  dur = bench<Poptrie2>(rand, repeat, true);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
-#endif
 
   std::cout << "   Layout: ";
-  dur = bench<Poptrie3>(rand, repeat, false);
+  dur = bench<Poptrie3>(rand, repeat, true);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   std::cout << "     Both: ";
-  dur = bench<Poptrie4>(rand, repeat, false);
+  dur = bench<Poptrie4>(rand, repeat, true);
   printf("%.1f Mlps\n", (double)repeat / (double)dur.count());
 
   return 0;
