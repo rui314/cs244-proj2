@@ -14,6 +14,7 @@ using std::chrono::high_resolution_clock;
 
 constexpr int K = 6;
 constexpr int S = 18;
+constexpr int LEN = 32;
 
 typedef uint32_t u32;
 typedef uint64_t u64;
@@ -64,21 +65,21 @@ public:
 
     if (key_len <= S) {
       for (int i = 0; i < (1L << (S - key_len)); i++) {
-        Node &node = roots[(key >> (32 - S)) + i];
+        Node &node = roots[(key >> (LEN - S)) + i];
         node.val = val;
         node.is_leaf = true;
       }
       return;
     }
 
-    Node *cur = &roots[extract(key, 32, S)];
-    u32 bits = extract(key, 32 - S, K);
+    Node *cur = &roots[extract(key, LEN, S)];
+    u32 bits = extract(key, LEN - S, K);
     int offset = S + K;
 
     while (offset < key_len) {
       expand(cur);
       cur = &cur->children[bits];
-      bits = extract(key, 32 - offset, K);
+      bits = extract(key, LEN - offset, K);
       offset += K;
     }
 
@@ -91,10 +92,10 @@ public:
   }
 
   u32 lookup(u32 key) {
-    Node *cur = &roots[extract(key, 32, S)];
+    Node *cur = &roots[extract(key, LEN, S)];
     int offset = S;
     while (!cur->is_leaf) {
-      int bits = extract(key, 32 - offset, K);
+      int bits = extract(key, LEN - offset, K);
       offset += K;
       cur = &cur->children[bits];
     }
@@ -135,7 +136,7 @@ public:
 
   __attribute__((noinline))
   u32 lookup(u32 key) {
-    int idx = direct_indices[key >> (32 - S)];
+    int idx = direct_indices[key >> (LEN - S)];
     if (idx & 0x80000000)
       return idx & 0x7fffffff;
 
@@ -144,7 +145,7 @@ public:
 
     for (;;) {
       Node &node = children[idx];
-      v = extract(key, 32 - offset, K);
+      v = extract(key, LEN - offset, K);
       if (!(node.bits & (1UL << v)))
         break;
       idx = node.base1 + popcnt(node.bits, v);
@@ -250,14 +251,14 @@ public:
 
   __attribute__((noinline))
   u32 lookup(u32 key) {
-    u32 idx = direct_indices[key >> (32 - S)];
+    u32 idx = direct_indices[key >> (LEN - S)];
     if (idx & 0x80000000)
       return idx & 0x3fffffff;
 
     if (idx & 0x40000000) {
       idx = idx & 0x3fffffff;
       u64 leafbits = *(u64 *)&leaf_only_node[idx];
-      u64 v = extract(key, 32 - S, K);
+      u64 v = extract(key, LEN - S, K);
       int count = popcnt_incl(leafbits, v);
       return leaf_only_node[idx + count + 1];
     }
@@ -267,7 +268,7 @@ public:
 
     for (;;) {
       Node &node = children[idx];
-      v = extract(key, 32 - offset, K);
+      v = extract(key, LEN - offset, K);
       if (!(node.bits & (1UL << v)))
         break;
       idx = node.base1 + popcnt(node.bits, v);
@@ -395,7 +396,7 @@ public:
 
   __attribute__((noinline))
   u32 lookup(u32 key) {
-    int idx = direct_indices[key >> (32 - S)];
+    int idx = direct_indices[key >> (LEN - S)];
     if (idx & 0x80000000)
       return idx & 0x7fffffff;
 
@@ -404,7 +405,7 @@ public:
 
     for (;;) {
       Node &node = *(Node *)&data[idx];
-      v = extract(key, 32 - offset, K);
+      v = extract(key, LEN - offset, K);
       if (!(node.bits & (1UL << v)))
         break;
       idx = node.base1 + popcnt(node.bits, v) * sizeof(Node);
@@ -497,14 +498,14 @@ public:
 
   __attribute__((noinline))
   u32 lookup(u32 key) {
-    u32 idx = direct_indices[key >> (32 - S)];
+    u32 idx = direct_indices[key >> (LEN - S)];
     if (idx & 0x80000000)
       return idx & 0x3fffffff;
 
     if (idx & 0x40000000) {
       idx = idx & 0x3fffffff;
       u64 leafbits = *(u64 *)&data[idx];
-      u64 v = extract(key, 32 - S, K);
+      u64 v = extract(key, LEN - S, K);
       int count = popcnt_incl(leafbits, v);
       return *(u32 *)&data[idx + 8 + (count - 1) * 4];
     }
@@ -514,7 +515,7 @@ public:
 
     for (;;) {
       Node &node = *(Node *)&data[idx];
-      v = extract(key, 32 - offset, K);
+      v = extract(key, LEN - offset, K);
       if (!(node.bits & (1UL << v)))
         break;
       idx = node.base1 + popcnt(node.bits, v) * sizeof(Node);
@@ -641,14 +642,14 @@ public:
 
   __attribute__((noinline))
   u32 lookup(u32 key) {
-    u32 idx = direct_indices[key >> (32 - S)];
+    u32 idx = direct_indices[key >> (LEN - S)];
     if (idx & 0x80000000)
       return idx & 0x3fffffff;
 
     if (idx & 0x40000000) {
       idx = idx & 0x3fffffff;
       u64 leafbits = *(u64 *)&data[idx];
-      u64 v = extract(key, 32 - S, K);
+      u64 v = extract(key, LEN - S, K);
       int count = popcnt_incl(leafbits, v) * 4;
       return *(u32 *)&data[idx + count + 4];
     }
@@ -658,7 +659,7 @@ public:
 
     for (;;) {
       Node &node = *(Node *)&data[idx];
-      v = extract(key, 32 - offset, K);
+      v = extract(key, LEN - offset, K);
       if (!(node.bits & (1UL << v)))
         break;
 
@@ -667,7 +668,7 @@ public:
 
       if (node.leafbits & (1UL << v)) {
         u64 leafbits = *(u64 *)&data[idx];
-        u64 v = extract(key, 32 - offset, K);
+        u64 v = extract(key, LEN - offset, K);
         int count = popcnt_incl(leafbits, v) * 4;
         return *(u32 *)&data[idx + count + 4];
       }
@@ -846,7 +847,7 @@ static void test1() {
 
 static bool in_range(Range &range, u32 addr) {
   return range.addr <= addr &&
-         addr < range.addr + (1L << (32 - range.masklen));
+         addr < range.addr + (1L << (LEN - range.masklen));
 }
 
 __attribute__((unused))
@@ -865,7 +866,7 @@ static void test() {
               };
 
   for (Range &range : ranges52) {
-    u32 end = range.addr + (1L << (32 - range.masklen)) - 1;
+    u32 end = range.addr + (1L << (LEN - range.masklen)) - 1;
     ASSERT(find(range.addr), ptrie.lookup(range.addr));
     ASSERT(find(end), ptrie.lookup(end));
   }
