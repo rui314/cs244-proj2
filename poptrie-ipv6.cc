@@ -877,7 +877,7 @@ static void test() {
 
 class Xorshift {
 public:
-  Xorshift(u128 seed) : a(seed>>96), b(seed>>64), c(seed>>32), d(seed) {}
+  Xorshift(u32 a, u32 b, u32 c, u32 d) : a(a), b(b), c(c), d(d) {}
 
   u128 next() {
     u32 t = d;
@@ -922,7 +922,8 @@ int main() {
 
 #if 1
   static std::uniform_int_distribution<u32> dist1(0, 1L<<31);
-  Xorshift rand(dist1(rand_engine));
+  Xorshift rand(dist1(rand_engine), dist1(rand_engine),
+                dist1(rand_engine), dist1(rand_engine));
 
   std::chrono::microseconds dur;
   u64 repeat = 300*1000*1000;
